@@ -1,0 +1,8 @@
+bin/
+sources.txt
+*.class
+.idea/
+*.iml
+.vscode/
+nbproject/private/
+resources/config.properties
