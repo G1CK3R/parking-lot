@@ -1,4 +1,4 @@
-package structures;
+package mz.uem.eda.parking.structures;
 
 public class ArrayStack {
 
