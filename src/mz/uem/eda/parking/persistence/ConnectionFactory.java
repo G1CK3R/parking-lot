@@ -1,4 +1,4 @@
-package persistence;
+package mz.uem.eda.parking.persistence;
 
 public class ConnectionFactory {
 

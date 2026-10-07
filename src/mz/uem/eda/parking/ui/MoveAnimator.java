@@ -1,4 +1,4 @@
-package ui;
+package mz.uem.eda.parking.ui;
 
 public class MoveAnimator {
 
