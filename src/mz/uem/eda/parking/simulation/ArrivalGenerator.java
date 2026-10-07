@@ -1,5 +1,5 @@
 package mz.uem.eda.parking.simulation;
 
-public class Metrics {
+public class ArrivalGenerator {
 
 }
