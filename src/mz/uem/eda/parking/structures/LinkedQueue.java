@@ -1,9 +1,8 @@
 package mz.uem.eda.parking.structures;
 
-import java.util.EmptyStackException;
+
 import java.util.Iterator;
 import java.util.NoSuchElementException;
-
 
 import mz.uem.eda.parking.structures.exceptions.EmptyStructureException;
 
@@ -39,7 +38,7 @@ public class LinkedQueue<T> implements Queue<T> {
     @Override 
     public T dequeue() {
         if(isEmpty()) {
-            throw new EmptyStackException();
+            throw new EmptyStructureException();
         }
         T value = head.value;
         head =  head.next;

@@ -22,6 +22,9 @@ public class LinkedStack<T> implements Stack<T> {
 
     @Override 
     public void push(T element) {
+        if (element == null) {
+            throw new NullPointerException("element must not be null");
+        }
         top = new Node<>(element, top);
         size++;
     }
@@ -74,10 +77,8 @@ public class LinkedStack<T> implements Stack<T> {
 
             @Override 
             public T next(){
-                if (current == null) {
-                    if (current == null){
+                if (current == null){
                         throw new NoSuchElementException();
-                    }
                 }
                 T value = current.value;
                 current = current.next;

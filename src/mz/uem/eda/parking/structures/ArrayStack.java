@@ -3,6 +3,7 @@ package mz.uem.eda.parking.structures;
 import java.util.NoSuchElementException;
 
 import mz.uem.eda.parking.structures.exceptions.EmptyStructureException;
+import mz.uem.eda.parking.structures.exceptions.FullStructureException;
 
 import java.util.Iterator;
 
@@ -25,7 +26,7 @@ public class ArrayStack<T> implements Stack<T> {
             throw new NullPointerException("Element must not be null");
         }
         if(isFull()) {
-            throw new EmptyStructureException();    
+            throw new FullStructureException();    
         }
         elements[size++] = element;
     }
@@ -33,7 +34,7 @@ public class ArrayStack<T> implements Stack<T> {
     @Override
     public T peek() {
         if (isEmpty()) {
-            throw new EmptyStructureException();
+            throw new FullStructureException();
         }
         return elements[size - 1];
     }
