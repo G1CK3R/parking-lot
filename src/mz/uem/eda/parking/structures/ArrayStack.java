@@ -34,7 +34,7 @@ public class ArrayStack<T> implements Stack<T> {
     @Override
     public T peek() {
         if (isEmpty()) {
-            throw new FullStructureException();
+            throw new EmptyStructureException();
         }
         return elements[size - 1];
     }
