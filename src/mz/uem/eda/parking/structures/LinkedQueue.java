@@ -6,15 +6,17 @@ import java.util.NoSuchElementException;
 import mz.uem.eda.parking.structures.exceptions.EmptyStructureException;
 
 /**
- * Unbounded queue backed by a singly linked list with references to both
- * ends. Used for the waiting line at the entrance, whose length is not
- * known in advance: each element costs one node, and the queue never fills.
+ * Fila de capacidade ilimitada sobre uma lista simplesmente ligada, com
+ * referências para as duas pontas. Usada na fila de espera à entrada, cujo
+ * comprimento não se conhece à partida: cada elemento custa um nó e a fila
+ * nunca enche.
  *
- * <p>Elements enter at the tail and leave at the head, so enqueue and
- * dequeue only touch one end each. The linked list is an implementation
- * detail: the domain sees only the {@link Queue} operations.
+ * <p>Os elementos entram pela cauda e saem pela cabeça, por isso
+ * {@code enqueue} e {@code dequeue} só mexem numa ponta cada. A lista ligada
+ * é um pormenor de implementação: o domínio só vê as operações de
+ * {@link Queue}.
  *
- * @param <T> element type
+ * @param <T> tipo dos elementos
  */
 public class LinkedQueue<T> implements Queue<T> {
 
@@ -27,22 +29,31 @@ public class LinkedQueue<T> implements Queue<T> {
         }
     }
 
-    /** Front of the queue, the next to leave; null when empty. */
+    /** Frente da fila, o próximo a sair; {@code null} quando vazia. */
     private Node<T> head;
 
-    /** Back of the queue, the last to arrive; null when empty. */
+    /** Cauda da fila, o último a chegar; {@code null} quando vazia. */
     private Node<T> tail;
 
-    /** Number of elements held, kept so that {@link #size()} is O(1). */
+    /** Número de elementos guardados, mantido para {@link #size()} ser O(1). */
     private int size;
 
     /**
-     * Adds an element at the back of the queue. Never fails for lack of
-     * space.
+     * Cria uma fila vazia.
      *
-     * @param element the element to add, never null
-     * @throws NullPointerException if {@code element} is null
-     * @complexity O(1), thanks to the reference to the tail
+     * @complexity O(1)
+     */
+    public LinkedQueue() {
+        // a fila começa sem nós: head == tail == null e size == 0
+    }
+
+    /**
+     * Acrescenta um elemento na cauda da fila. Nunca falha por falta de
+     * espaço.
+     *
+     * @param element o elemento a acrescentar, nunca {@code null}
+     * @throws NullPointerException se {@code element} for {@code null}
+     * @complexity O(1), graças à referência para a cauda
      */
     @Override
     public void enqueue(T element) {
@@ -51,7 +62,7 @@ public class LinkedQueue<T> implements Queue<T> {
         }
         Node<T> node = new Node<>(element);
         if (tail == null) {
-            head = node; // first element is both front and back
+            head = node; // o primeiro elemento é ao mesmo tempo frente e cauda
         } else {
             tail.next = node;
         }
@@ -60,12 +71,12 @@ public class LinkedQueue<T> implements Queue<T> {
     }
 
     /**
-     * Removes and returns the element at the front of the queue. When the
-     * last element leaves, the tail is reset as well, so the next enqueue
-     * starts a fresh list.
+     * Retira e devolve o elemento da frente da fila. Quando sai o último
+     * elemento, a cauda também é reposta, para o próximo {@code enqueue}
+     * começar uma lista nova.
      *
-     * @return the element that has waited the longest
-     * @throws EmptyStructureException if the queue holds no elements
+     * @return o elemento que espera há mais tempo
+     * @throws EmptyStructureException se a fila não tiver elementos
      * @complexity O(1)
      */
     @Override
@@ -83,10 +94,10 @@ public class LinkedQueue<T> implements Queue<T> {
     }
 
     /**
-     * Returns the element at the front without removing it.
+     * Devolve o elemento da frente da fila sem o retirar.
      *
-     * @return the element that has waited the longest
-     * @throws EmptyStructureException if the queue holds no elements
+     * @return o elemento que espera há mais tempo
+     * @throws EmptyStructureException se a fila não tiver elementos
      * @complexity O(1)
      */
     @Override
@@ -98,7 +109,9 @@ public class LinkedQueue<T> implements Queue<T> {
     }
 
     /**
-     * @return true if the queue holds no elements
+     * Indica se a fila está vazia.
+     *
+     * @return {@code true} se a fila não tiver elementos
      * @complexity O(1)
      */
     @Override
@@ -107,7 +120,9 @@ public class LinkedQueue<T> implements Queue<T> {
     }
 
     /**
-     * @return the number of elements currently held
+     * Indica quantos elementos a fila guarda neste momento.
+     *
+     * @return o número de elementos
      * @complexity O(1)
      */
     @Override
@@ -116,9 +131,10 @@ public class LinkedQueue<T> implements Queue<T> {
     }
 
     /**
-     * Always false: the queue is unbounded and grows one node at a time.
+     * Devolve sempre {@code false}: a fila não tem limite e cresce um nó de
+     * cada vez.
      *
-     * @return false
+     * @return {@code false}
      * @complexity O(1)
      */
     @Override
@@ -127,13 +143,13 @@ public class LinkedQueue<T> implements Queue<T> {
     }
 
     /**
-     * Read-only traversal from the front to the back, the order in which
-     * {@link #dequeue()} would return the elements. {@code remove} is not
-     * supported and throws {@link UnsupportedOperationException}. Do not
-     * enqueue or dequeue while iterating.
+     * Percurso só de leitura da frente para a cauda, a ordem pela qual
+     * {@link #dequeue()} devolveria os elementos. {@code remove} não é
+     * suportado e lança {@link UnsupportedOperationException}. Não fazer
+     * {@code enqueue} nem {@code dequeue} durante o percurso.
      *
-     * @return an iterator over the elements, front first
-     * @complexity O(1) to create; O(n) for a full traversal
+     * @return um iterador sobre os elementos, a começar pela frente
+     * @complexity O(1) para criar; O(n) para um percurso completo
      */
     @Override
     public Iterator<T> iterator() {

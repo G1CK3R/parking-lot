@@ -6,15 +6,16 @@ import java.util.NoSuchElementException;
 import mz.uem.eda.parking.structures.exceptions.EmptyStructureException;
 
 /**
- * Unbounded stack backed by a singly linked list. Used for the operator's
- * undo stack and the shift's transaction stack, whose depth is not known
- * in advance: each element costs one node, and the stack never fills.
+ * Pilha de capacidade ilimitada sobre uma lista simplesmente ligada. Usada
+ * na pilha de desfazer do operador e na pilha de transacções do turno, cuja
+ * profundidade não se conhece à partida: cada elemento custa um nó e a pilha
+ * nunca enche.
  *
- * <p>The head of the list is the top of the stack, so push and pop only
- * touch the first node. The linked list is an implementation detail: the
- * domain sees only the {@link Stack} operations.
+ * <p>A cabeça da lista é o topo da pilha, por isso {@code push} e
+ * {@code pop} só mexem no primeiro nó. A lista ligada é um pormenor de
+ * implementação: o domínio só vê as operações de {@link Stack}.
  *
- * @param <T> element type
+ * @param <T> tipo dos elementos
  */
 public class LinkedStack<T> implements Stack<T> {
 
@@ -28,17 +29,26 @@ public class LinkedStack<T> implements Stack<T> {
         }
     }
 
-    /** First node of the list and top of the stack; null when empty. */
+    /** Primeiro nó da lista e topo da pilha; {@code null} quando vazia. */
     private Node<T> top;
 
-    /** Number of elements held, kept so that {@link #size()} is O(1). */
+    /** Número de elementos guardados, mantido para {@link #size()} ser O(1). */
     private int size;
 
     /**
-     * Places an element on top of the stack. Never fails for lack of space.
+     * Cria uma pilha vazia.
      *
-     * @param element the element to add, never null
-     * @throws NullPointerException if {@code element} is null
+     * @complexity O(1)
+     */
+    public LinkedStack() {
+        // a pilha começa sem nós: top == null e size == 0
+    }
+
+    /**
+     * Coloca um elemento no topo da pilha. Nunca falha por falta de espaço.
+     *
+     * @param element o elemento a acrescentar, nunca {@code null}
+     * @throws NullPointerException se {@code element} for {@code null}
      * @complexity O(1)
      */
     @Override
@@ -51,10 +61,10 @@ public class LinkedStack<T> implements Stack<T> {
     }
 
     /**
-     * Removes and returns the element on top of the stack.
+     * Retira e devolve o elemento do topo da pilha.
      *
-     * @return the element that was on top
-     * @throws EmptyStructureException if the stack holds no elements
+     * @return o elemento que estava no topo
+     * @throws EmptyStructureException se a pilha não tiver elementos
      * @complexity O(1)
      */
     @Override
@@ -69,10 +79,10 @@ public class LinkedStack<T> implements Stack<T> {
     }
 
     /**
-     * Returns the element on top of the stack without removing it.
+     * Devolve o elemento do topo da pilha sem o retirar.
      *
-     * @return the element on top
-     * @throws EmptyStructureException if the stack holds no elements
+     * @return o elemento do topo
+     * @throws EmptyStructureException se a pilha não tiver elementos
      * @complexity O(1)
      */
     @Override
@@ -84,9 +94,10 @@ public class LinkedStack<T> implements Stack<T> {
     }
 
     /**
-     * Always false: the stack is unbounded and grows one node at a time.
+     * Devolve sempre {@code false}: a pilha não tem limite e cresce um nó de
+     * cada vez.
      *
-     * @return false
+     * @return {@code false}
      * @complexity O(1)
      */
     @Override
@@ -95,7 +106,9 @@ public class LinkedStack<T> implements Stack<T> {
     }
 
     /**
-     * @return the number of elements currently held
+     * Indica quantos elementos a pilha guarda neste momento.
+     *
+     * @return o número de elementos
      * @complexity O(1)
      */
     @Override
@@ -104,7 +117,9 @@ public class LinkedStack<T> implements Stack<T> {
     }
 
     /**
-     * @return true if the stack holds no elements
+     * Indica se a pilha está vazia.
+     *
+     * @return {@code true} se a pilha não tiver elementos
      * @complexity O(1)
      */
     @Override
@@ -113,13 +128,13 @@ public class LinkedStack<T> implements Stack<T> {
     }
 
     /**
-     * Read-only traversal from the top to the bottom, the order in which
-     * {@link #pop()} would return the elements. {@code remove} is not
-     * supported and throws {@link UnsupportedOperationException}. Do not
-     * push or pop while iterating.
+     * Percurso só de leitura do topo para o fundo, a ordem pela qual
+     * {@link #pop()} devolveria os elementos. {@code remove} não é suportado
+     * e lança {@link UnsupportedOperationException}. Não fazer {@code push}
+     * nem {@code pop} durante o percurso.
      *
-     * @return an iterator over the elements, top first
-     * @complexity O(1) to create; O(n) for a full traversal
+     * @return um iterador sobre os elementos, a começar pelo topo
+     * @complexity O(1) para criar; O(n) para um percurso completo
      */
     @Override
     public Iterator<T> iterator() {

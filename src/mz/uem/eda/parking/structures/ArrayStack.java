@@ -7,28 +7,28 @@ import mz.uem.eda.parking.structures.exceptions.EmptyStructureException;
 import mz.uem.eda.parking.structures.exceptions.FullStructureException;
 
 /**
- * Fixed-capacity stack backed by an array. Used for the parking lanes and
- * the buffer lane, whose physical depth is known in advance: memory is
- * allocated once and never grows.
+ * Pilha de capacidade fixa sobre um vector. Usada nas baias de
+ * estacionamento e na baia de manobra, cuja profundidade física se conhece
+ * à partida: a memória é reservada uma vez e nunca cresce.
  *
- * <p>The bottom of the stack is index 0 and the top is index
- * {@code size - 1}, so push and pop never shift elements.
+ * <p>O fundo da pilha é a posição 0 e o topo é a posição {@code size - 1};
+ * por isso {@code push} e {@code pop} nunca deslocam elementos.
  *
- * @param <T> element type
+ * @param <T> tipo dos elementos
  */
 public class ArrayStack<T> implements Stack<T> {
 
     private final T[] elements;
 
-    /** Number of elements held; the top is at {@code size - 1}. */
+    /** Número de elementos guardados; o topo está em {@code size - 1}. */
     private int size;
 
     /**
-     * Creates an empty stack.
+     * Cria uma pilha vazia.
      *
-     * @param capacity maximum number of elements, at least 1
-     * @throws IllegalArgumentException if {@code capacity} is less than 1
-     * @complexity O(n) in the capacity, to allocate the array
+     * @param capacity número máximo de elementos, pelo menos 1
+     * @throws IllegalArgumentException se {@code capacity} for menor que 1
+     * @complexity O(n) na capacidade, para reservar o vector
      */
     @SuppressWarnings("unchecked")
     public ArrayStack(int capacity) {
@@ -39,12 +39,12 @@ public class ArrayStack<T> implements Stack<T> {
     }
 
     /**
-     * Places an element on top of the stack.
+     * Coloca um elemento no topo da pilha.
      *
-     * @param element the element to add, never null
-     * @throws NullPointerException if {@code element} is null
-     * @throws FullStructureException if the stack already holds
-     *         {@code capacity} elements
+     * @param element o elemento a acrescentar, nunca {@code null}
+     * @throws NullPointerException se {@code element} for {@code null}
+     * @throws FullStructureException se a pilha já guardar {@code capacity}
+     *         elementos
      * @complexity O(1)
      */
     @Override
@@ -59,10 +59,10 @@ public class ArrayStack<T> implements Stack<T> {
     }
 
     /**
-     * Returns the element on top of the stack without removing it.
+     * Devolve o elemento do topo da pilha sem o retirar.
      *
-     * @return the element on top
-     * @throws EmptyStructureException if the stack holds no elements
+     * @return o elemento do topo
+     * @throws EmptyStructureException se a pilha não tiver elementos
      * @complexity O(1)
      */
     @Override
@@ -74,11 +74,11 @@ public class ArrayStack<T> implements Stack<T> {
     }
 
     /**
-     * Removes and returns the element on top of the stack. The freed slot
-     * is cleared so the array keeps no reference to a car that has left.
+     * Retira e devolve o elemento do topo da pilha. A posição libertada é
+     * limpa, para o vector não guardar referência a um carro que já saiu.
      *
-     * @return the element that was on top
-     * @throws EmptyStructureException if the stack holds no elements
+     * @return o elemento que estava no topo
+     * @throws EmptyStructureException se a pilha não tiver elementos
      * @complexity O(1)
      */
     @Override
@@ -92,7 +92,9 @@ public class ArrayStack<T> implements Stack<T> {
     }
 
     /**
-     * @return true if the stack holds no elements
+     * Indica se a pilha está vazia.
+     *
+     * @return {@code true} se a pilha não tiver elementos
      * @complexity O(1)
      */
     @Override
@@ -101,7 +103,10 @@ public class ArrayStack<T> implements Stack<T> {
     }
 
     /**
-     * @return true if the stack holds as many elements as its capacity
+     * Indica se a pilha está cheia.
+     *
+     * @return {@code true} se a pilha guardar tantos elementos como a sua
+     *         capacidade
      * @complexity O(1)
      */
     @Override
@@ -110,7 +115,9 @@ public class ArrayStack<T> implements Stack<T> {
     }
 
     /**
-     * @return the number of elements currently held
+     * Indica quantos elementos a pilha guarda neste momento.
+     *
+     * @return o número de elementos
      * @complexity O(1)
      */
     @Override
@@ -119,13 +126,13 @@ public class ArrayStack<T> implements Stack<T> {
     }
 
     /**
-     * Read-only traversal from the top to the bottom, the order in which
-     * {@link #pop()} would return the elements. {@code remove} is not
-     * supported and throws {@link UnsupportedOperationException}. Do not
-     * push or pop while iterating.
+     * Percurso só de leitura do topo para o fundo, a ordem pela qual
+     * {@link #pop()} devolveria os elementos. {@code remove} não é suportado
+     * e lança {@link UnsupportedOperationException}. Não fazer {@code push}
+     * nem {@code pop} durante o percurso.
      *
-     * @return an iterator over the elements, top first
-     * @complexity O(1) to create; O(n) for a full traversal
+     * @return um iterador sobre os elementos, a começar pelo topo
+     * @complexity O(1) para criar; O(n) para um percurso completo
      */
     @Override
     public Iterator<T> iterator() {

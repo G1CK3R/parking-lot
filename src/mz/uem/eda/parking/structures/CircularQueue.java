@@ -7,28 +7,28 @@ import mz.uem.eda.parking.structures.exceptions.EmptyStructureException;
 import mz.uem.eda.parking.structures.exceptions.FullStructureException;
 
 /**
- * Fixed-capacity queue backed by a circular array. Used for the through
- * lanes and for the history of the last N moves: memory never grows and no
- * element is ever shifted.
+ * Fila de capacidade fixa sobre um vector circular. Usada nas baias
+ * atravessáveis e no histórico dos últimos N movimentos: a memória nunca
+ * cresce e nenhum elemento é deslocado.
  *
- * @param <T> element type
+ * @param <T> tipo dos elementos
  */
 public class CircularQueue<T> implements Queue<T> {
 
     private final T[] elements;
 
-    /** Index of the front element (the next to leave). */
+    /** Posição do elemento da frente (o próximo a sair). */
     private int head;
 
-    /** Number of elements held. The back is at {@code (head + size) % capacity}. */
+    /** Número de elementos guardados. A cauda está em {@code (head + size) % capacity}. */
     private int size;
 
     /**
-     * Creates an empty queue.
+     * Cria uma fila vazia.
      *
-     * @param capacity maximum number of elements, at least 1
-     * @throws IllegalArgumentException if {@code capacity} is less than 1
-     * @complexity O(n) in the capacity, to allocate the array
+     * @param capacity número máximo de elementos, pelo menos 1
+     * @throws IllegalArgumentException se {@code capacity} for menor que 1
+     * @complexity O(n) na capacidade, para reservar o vector
      */
     @SuppressWarnings("unchecked")
     public CircularQueue(int capacity) {
@@ -41,11 +41,11 @@ public class CircularQueue<T> implements Queue<T> {
     }
 
     /**
-     * Adds an element at the back of the queue.
+     * Acrescenta um elemento na cauda da fila.
      *
-     * @param element the element to add, never null
-     * @throws NullPointerException if {@code element} is null
-     * @throws FullStructureException if the queue is full
+     * @param element o elemento a acrescentar, nunca {@code null}
+     * @throws NullPointerException se {@code element} for {@code null}
+     * @throws FullStructureException se a fila estiver cheia
      * @complexity O(1)
      */
     @Override
@@ -61,10 +61,10 @@ public class CircularQueue<T> implements Queue<T> {
     }
 
     /**
-     * Removes and returns the element at the front of the queue.
+     * Retira e devolve o elemento da frente da fila.
      *
-     * @return the element that has waited the longest
-     * @throws EmptyStructureException if the queue holds no elements
+     * @return o elemento que espera há mais tempo
+     * @throws EmptyStructureException se a fila não tiver elementos
      * @complexity O(1)
      */
     @Override
@@ -73,17 +73,17 @@ public class CircularQueue<T> implements Queue<T> {
             throw new EmptyStructureException();
         }
         T value = elements[head];
-        elements[head] = null; // do not keep a reference to a vehicle that has left
+        elements[head] = null; // não guardar referência a um veículo que já saiu
         head = (head + 1) % elements.length;
         size--;
         return value;
     }
 
     /**
-     * Returns the element at the front without removing it.
+     * Devolve o elemento da frente sem o retirar.
      *
-     * @return the element that has waited the longest
-     * @throws EmptyStructureException if the queue holds no elements
+     * @return o elemento que espera há mais tempo
+     * @throws EmptyStructureException se a fila não tiver elementos
      * @complexity O(1)
      */
     @Override
@@ -95,7 +95,9 @@ public class CircularQueue<T> implements Queue<T> {
     }
 
     /**
-     * @return true if the queue holds no elements
+     * Indica se a fila está vazia.
+     *
+     * @return {@code true} se a fila não tiver elementos
      * @complexity O(1)
      */
     @Override
@@ -104,7 +106,10 @@ public class CircularQueue<T> implements Queue<T> {
     }
 
     /**
-     * @return true if the queue holds as many elements as its capacity
+     * Indica se a fila está cheia.
+     *
+     * @return {@code true} se a fila guardar tantos elementos como a sua
+     *         capacidade
      * @complexity O(1)
      */
     @Override
@@ -113,7 +118,9 @@ public class CircularQueue<T> implements Queue<T> {
     }
 
     /**
-     * @return the number of elements currently held
+     * Indica quantos elementos a fila guarda neste momento.
+     *
+     * @return o número de elementos
      * @complexity O(1)
      */
     @Override
@@ -122,12 +129,12 @@ public class CircularQueue<T> implements Queue<T> {
     }
 
     /**
-     * Read-only traversal from the front to the back, the order in which the
-     * elements would leave. {@code remove} is not supported. Do not enqueue
-     * or dequeue while iterating.
+     * Percurso só de leitura da frente para a cauda, a ordem pela qual os
+     * elementos sairiam. {@code remove} não é suportado. Não fazer
+     * {@code enqueue} nem {@code dequeue} durante o percurso.
      *
-     * @return an iterator over the elements, front first
-     * @complexity O(n) for a full traversal
+     * @return um iterador sobre os elementos, a começar pela frente
+     * @complexity O(1) para criar; O(n) para um percurso completo
      */
     @Override
     public Iterator<T> iterator() {

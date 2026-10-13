@@ -4,69 +4,76 @@ import mz.uem.eda.parking.structures.exceptions.EmptyStructureException;
 import mz.uem.eda.parking.structures.exceptions.FullStructureException;
 
 /**
- * Last-in, first-out collection: the element added last is the first to
- * leave. Models a dead-end lane, where cars enter and leave through the
- * same end, and the buffer lane used to reach a car at depth k.
+ * Colecção LIFO (último a entrar, primeiro a sair): o elemento acrescentado
+ * por último é o primeiro a sair. Modela a baia em beco sem saída, onde os
+ * carros entram e saem pelo mesmo extremo, e a baia de manobra usada para
+ * chegar a um carro à profundidade k.
  *
- * <p>Only the top is visible. The single exception is the read-only
- * traversal inherited from {@link Iterable}, which goes from the top to
- * the bottom without removing anything.
+ * <p>Só o topo é visível. A única excepção é o percurso só de leitura
+ * herdado de {@link Iterable}, que vai do topo para o fundo sem retirar
+ * nada.
  *
- * <p>Implementations may be bounded ({@link ArrayStack}) or unbounded
- * ({@link LinkedStack}). Null elements are never accepted. Not thread-safe:
- * the domain touches stacks only on the Swing event thread.
+ * <p>As implementações podem ter capacidade limitada ({@link ArrayStack}) ou
+ * ilimitada ({@link LinkedStack}). Nunca aceitam elementos {@code null}. Não
+ * são seguras entre threads: o domínio só toca nas pilhas a partir da thread
+ * de eventos do Swing.
  *
- * @param <T> element type
+ * @param <T> tipo dos elementos
  */
 public interface Stack<T> extends Iterable<T> {
 
     /**
-     * Places an element on top of the stack. After the call it is the
-     * element returned by {@link #peek()} and the size has grown by one.
+     * Coloca um elemento no topo da pilha. Depois da chamada, é esse o
+     * elemento devolvido por {@link #peek()} e o tamanho aumentou uma unidade.
      *
-     * @param element the element to add, never null
-     * @throws NullPointerException if {@code element} is null
-     * @throws FullStructureException if the stack is bounded and full
+     * @param element o elemento a acrescentar, nunca {@code null}
+     * @throws NullPointerException se {@code element} for {@code null}
+     * @throws FullStructureException se a pilha tiver capacidade limitada e
+     *         estiver cheia
      * @complexity O(1)
      */
     void push(T element);
 
     /**
-     * Removes and returns the element on top of the stack, the one added
-     * most recently. The size shrinks by one.
+     * Retira e devolve o elemento do topo da pilha, o que foi acrescentado
+     * mais recentemente. O tamanho diminui uma unidade.
      *
-     * @return the element that was on top
-     * @throws EmptyStructureException if the stack holds no elements
+     * @return o elemento que estava no topo
+     * @throws EmptyStructureException se a pilha não tiver elementos
      * @complexity O(1)
      */
     T pop();
 
     /**
-     * Returns the element on top of the stack without removing it.
+     * Devolve o elemento do topo da pilha sem o retirar.
      *
-     * @return the element on top
-     * @throws EmptyStructureException if the stack holds no elements
+     * @return o elemento do topo
+     * @throws EmptyStructureException se a pilha não tiver elementos
      * @complexity O(1)
      */
     T peek();
 
     /**
-     * @return true if the stack holds no elements
+     * Indica se a pilha está vazia.
+     *
+     * @return {@code true} se a pilha não tiver elementos
      * @complexity O(1)
      */
     boolean isEmpty();
 
     /**
-     * @return the number of elements currently held
+     * Indica quantos elementos a pilha guarda neste momento.
+     *
+     * @return o número de elementos
      * @complexity O(1)
      */
     int size();
 
     /**
-     * Tells whether another {@link #push(Object)} would fail. An unbounded
-     * implementation always returns false.
+     * Indica se mais um {@link #push(Object)} falharia. Uma implementação de
+     * capacidade ilimitada devolve sempre {@code false}.
      *
-     * @return true if the stack has reached its capacity
+     * @return {@code true} se a pilha tiver atingido a capacidade
      * @complexity O(1)
      */
     boolean isFull();
