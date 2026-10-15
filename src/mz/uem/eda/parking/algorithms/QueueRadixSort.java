@@ -1,7 +1,5 @@
 package mz.uem.eda.parking.algorithms;
 
-import java.util.function.ToIntFunction;
-
 import mz.uem.eda.parking.structures.LinkedQueue;
 import mz.uem.eda.parking.structures.Queue;
 
@@ -43,7 +41,7 @@ public final class QueueRadixSort {
             max = Math.max(max, k);
         }
 
-        @SuppressWarnings({"unchecked", "rawtypes"}) // o Java não cria vectores genéricos
+        @SuppressWarnings("unchecked") // o Java não cria vectores genéricos
 
         Queue<T>[] buckets = new Queue[10];
         for(int d = 0; d < 10; d++) {
