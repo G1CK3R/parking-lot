@@ -58,7 +58,7 @@ public class ParkingSession {
      *         positivo, {@code laneCode} estiver vazio ou
      *         {@code estimatedMinutes} for negativo
      */
-    public ParkingSession(long ticketNumber, Vehicle vehicle, String laneCode,
+    public ParkingSession(int ticketNumber, Vehicle vehicle, String laneCode,
             StayClass stayClass, int estimatedMinutes, LocalDateTime entryTime) {
         throw new UnsupportedOperationException("Not implemented yet");
     }
@@ -82,8 +82,13 @@ public class ParkingSession {
         throw new UnsupportedOperationException("Not implemented yet");
     }
 
-    /** @return o número do talão */
-    public long getTicketNumber() {
+    /**
+     * @return o número do talão. É um {@code int}, e não um {@code long},
+     *         para servir directamente de chave ao radix sort
+     *         ({@code SortKey.of} devolve {@code int}); dois mil milhões de
+     *         talões chegam para a vida do parque.
+     */
+    public int getTicketNumber() {
         throw new UnsupportedOperationException("Not implemented yet");
     }
 
