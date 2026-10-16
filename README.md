@@ -84,16 +84,17 @@ concentra-se entre as **7h e as 9h** e as saídas entre as **16h e as 18h**.
 
 | Ferramenta | Versão | Nota |
 | --- | --- | --- |
-| JDK | 27 para desenvolver | Compila-se sempre com `--release 17` |
+| JDK | 17 ou mais recente | O código só usa o que existe no Java 17 |
+| VS Code | qualquer versão recente | Com o *Extension Pack for Java* |
 | MySQL | 8.0 ou superior | Também serve MariaDB equivalente |
 | Git | qualquer versão recente | |
 
 **Não é preciso Maven, Gradle nem ligação à internet.** Todas as dependências estão versionadas em
-`lib/`: o driver JDBC do MySQL, o FlatLaf e a consola do JUnit. Clonar o repositório basta para compilar.
+`lib/`: o driver JDBC do MySQL, o FlatLaf e o JUnit. A configuração do VS Code também está versionada
+em `.vscode/`, por isso abrir a pasta basta para correr.
 
-> **Porquê `--release 17` com um JDK 27?** O bytecode gerado por omissão num JDK 27 não corre num JDK 17.
-> Com `--release 17`, o compilador recusa qualquer API posterior ao Java 17 e o resultado corre em qualquer
-> máquina da equipa ou do laboratório. Nenhuma funcionalidade do projecto precisa de mais do que o Java 17.
+> **Só APIs do Java 17.** Cada pessoa pode ter um JDK mais recente, mas ninguém usa nada que tenha
+> aparecido depois do Java 17. Assim o projecto corre em qualquer máquina da equipa ou do laboratório.
 
 ---
 
@@ -136,54 +137,42 @@ db.password=a-vossa-palavra-passe
 > `resources/config.properties` está no `.gitignore` de propósito. **Nunca o comitem** — cada pessoa
 > tem o seu. O que é versionado é o `.example`.
 
-### 4. Compilar e arrancar
+### 4. Abrir no VS Code e arrancar
 
-```bash
-./build.sh && ./run.sh
-```
+Ver a secção seguinte.
 
 ---
 
 ## Compilar e correr
 
-### Linux e macOS
+O projecto corre a partir do VS Code, igual em Linux, Windows e macOS.
 
-```bash
-./build.sh    # compila src/ e test/ para bin/
-./run.sh      # arranca a aplicação
-```
+1. **File → Open Folder…** e escolher a pasta `parking-lot` (a raiz, não `src`).
+2. Na primeira vez, aceitar a sugestão de instalar o *Extension Pack for Java* e esperar que a barra de
+   estado deixe de dizer «Java: Loading».
+3. Abrir `src/mz/uem/eda/parking/Main.java` e carregar em **Run** por cima do método `main`, ou F5 com a
+   configuração «Parque de Estacionamento».
 
-O que os scripts fazem por dentro:
+O VS Code compila sozinho cada vez que se grava um ficheiro: não há nenhum passo de compilação à mão.
+Os erros aparecem sublinhados no código e no separador *Problems*.
 
-```bash
-# build.sh
-find src test -name '*.java' > sources.txt
-javac --release 17 -encoding UTF-8 -d bin -cp 'lib/*' @sources.txt
+A configuração está em `.vscode/` e é igual para todos:
 
-# run.sh
-java -cp 'bin:lib/*:resources' mz.uem.eda.parking.Main
-```
+- `settings.json` — `src` e `test` são as pastas de código, os jars de `lib/` entram no classpath,
+  ficheiros em UTF-8
+- `launch.json` — arranca `mz.uem.eda.parking.Main` com a pasta `resources` no classpath, senão a
+  interface não encontra `strings_pt.properties` e arranca sem textos
+- `extensions.json` — sugere o *Extension Pack for Java* a quem abre a pasta
 
-### Windows
-
-```bat
-build.bat
-run.bat
-```
-
-Mudam duas coisas: a listagem dos ficheiros é `dir /s /b src\*.java test\*.java > sources.txt` e o
-separador do classpath é `;` em vez de `:`.
-
-A pasta `resources` **tem de entrar no classpath de execução**, senão o `ResourceBundle` não encontra
-`strings_pt.properties` e a interface arranca sem textos. É o erro mais fácil de cometer nos scripts.
+**Não alterem estes três ficheiros na vossa máquina.** Se for preciso mudar alguma coisa, muda-se no
+repositório para todos.
 
 ---
 
 ## Testes
 
-```bash
-java -jar lib/junit-platform-console-standalone-1.x.x.jar --class-path bin --scan-class-path
-```
+No separador **Testing** do VS Code (o ícone do frasco na barra lateral) aparecem todos os testes de
+`test/`. O botão ▶ no topo corre-os todos; também se pode correr só uma classe ou um teste.
 
 Cada TAD tem um teste que cobre o contrato, a estrutura vazia, a estrutura cheia e a ordem de saída.
 As políticas de colocação são testadas sobre os mesmos cenários fixos, para poderem ser comparadas
@@ -197,10 +186,9 @@ com números em vez de opiniões.
 
 ```
 parking-lot/
-├── build.sh  build.bat          compila para bin/
-├── run.sh    run.bat            executa
+├── .vscode/                     configuração partilhada do VS Code
 ├── lib/                         jars versionados (sem Maven)
-├── bin/                         saída da compilação, fora do git
+├── bin/                         .class gerados pelo VS Code, fora do git
 ├── sql/                         01-schema.sql, 02-seed.sql
 ├── resources/                   strings_pt.properties, config, ícones
 ├── docs/                        relatório, maquetes, diagramas, medições
@@ -262,7 +250,7 @@ Cada frente é dona dos seus ficheiros. Ninguém escreve na pasta de outra pesso
 
 | Frente | Ficheiros |
 | --- | --- |
-| Coordenação | scripts, `lib/`, `sql/`, este README, revisão das integrações |
+| Coordenação | `.vscode/`, `lib/`, `sql/`, este README, revisão das integrações |
 | Estruturas | `structures/`, `algorithms/`, `test/structures/` |
 | Domínio | `model/`, `persistence/`, serviços de entrada, saída e facturação |
 | Políticas | `service/policy/`, `WaitingQueueService`, `test/service/policy/` |
@@ -292,14 +280,15 @@ Ramos com mais de uma semana de vida são o caminho mais rápido para uma semana
 
 | Sintoma | Causa | Solução |
 | --- | --- | --- |
-| `ClassNotFoundException: com.mysql.cj.jdbc.Driver` | `lib/` fora do classpath | Usar os scripts; não invocar `java` à mão |
-| `MissingResourceException: strings_pt` | `resources` fora do classpath de execução | Confirmar o `-cp` do `run` |
+| Imports de `structures` ou do JUnit sublinhados a vermelho | pasta errada aberta, ou o Java ainda a carregar | Abrir a raiz `parking-lot`; esperar pelo fim de «Java: Loading»; se persistir, *Java: Clean Java Language Server Workspace* |
+| Não aparece o botão **Run** | falta o *Extension Pack for Java* | Instalar a extensão e reabrir a pasta |
+| `ClassNotFoundException: com.mysql.cj.jdbc.Driver` | `lib/` fora do classpath | Confirmar que `.vscode/settings.json` não foi alterado |
+| `MissingResourceException: strings_pt` | arrancou sem a configuração do `launch.json` | Arrancar com F5 → «Parque de Estacionamento» |
 | Interface arranca sem textos | o mesmo | o mesmo |
 | `Access denied for user` | credenciais erradas em `config.properties` | Rever utilizador, palavra-passe e privilégios |
 | `Unknown database 'parking_lot'` | o `01-schema.sql` não correu | Correr os dois ficheiros de `sql/` |
-| `UnsupportedClassVersionError` | compilado sem `--release 17` | Recompilar com os scripts |
-| Compila em Linux e falha em Windows | separador do classpath | `;` no `.bat`, `:` no `.sh` |
-| Acentos trocados no código | falta `-encoding UTF-8` | Já está nos scripts; confirmar que não foi alterado |
+| Compila numa máquina e falha noutra | uso de uma API posterior ao Java 17 | Trocar pela equivalente do Java 17 |
+| Acentos trocados no código | ficheiro gravado fora de UTF-8 | Barra de estado → codificação → *Save with Encoding* → UTF-8 |
 
 ---
 

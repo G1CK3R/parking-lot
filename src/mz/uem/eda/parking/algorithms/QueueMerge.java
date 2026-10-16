@@ -13,7 +13,7 @@ import mz.uem.eda.parking.structures.Queue;
  * <p>Uso: {@code Queue<Integer> juntos = QueueMerge.merge(a, b, new IntegerKey());}
  */
 
-public class QueueMerge {
+public final class QueueMerge {
 
     private QueueMerge(){}
 
