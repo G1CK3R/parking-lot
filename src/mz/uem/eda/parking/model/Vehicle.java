@@ -95,12 +95,6 @@ public class Vehicle {
         return plate.equals(((Vehicle) other).plate);
     }
 
-    /** Coerente com {@link #equals(Object)}: calculado só a partir da matrícula. */
-    @Override
-    public int hashCode() {
-        return plate.hashCode();
-    }
-
     /** @return a matrícula normalizada, para depuração e para a consola */
     @Override
     public String toString() {

@@ -15,6 +15,7 @@ public class User {
     private String salt;
     private int iterations;
 
+    //A id serve como indentificador da base de dados
     private long id;
 
     public User(String username, String passwordHash, String salt, int iterations, Role role) {
@@ -112,12 +113,6 @@ public class User {
             return false;
         }
         return username.equals(((User) other).username);
-    }
-
-    /** Coerente com {@link #equals(Object)}: calculado só a partir do nome de utilizador. */
-    @Override
-    public int hashCode() {
-        return username.hashCode();
     }
 
     /**
