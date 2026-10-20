@@ -21,9 +21,35 @@ package mz.uem.eda.parking.model;
 
 public class Tariff {
     
+    /**
+     * Tolerância gratuita, em minutos (RN01). Uma estadia que não passe deste
+     * valor, inclusive, não paga nada; passada a tolerância, paga-se a
+     * estadia toda desde a entrada, sem descontar estes minutos. Zero quer
+     * dizer sem tolerância. Nunca negativa.
+     */
     private final int freeMinutes;
+
+    /**
+     * Fracção mínima de cobrança, em minutos (RN02). O tempo que sobra depois
+     * dos dias completos arredonda-se para cima até um múltiplo deste valor:
+     * com fracções de 15 min, uma estadia de 61 min cobra-se como 75. Entre 1
+     * (cobrança ao minuto) e 60 (cobrança à hora).
+     */
     private final int fractionMinutes;
+
+    /**
+     * Valor de uma hora de estacionamento, em centavos de metical: 60 MZN
+     * guarda-se como {@code 6000}. Uma fracção paga a parte proporcional,
+     * arredondada para cima ao centavo. Nunca negativo.
+     */
     private final long hourlyRateCents;
+
+    /**
+     * Tecto diário, em centavos de metical (RN03): o máximo que se paga por
+     * cada bloco de 24 h desde a entrada. Cada dia completo paga exactamente
+     * este valor, e o resto do último dia nunca paga mais do que ele. Nunca
+     * menor que {@link #hourlyRateCents}.
+     */
     private final long dailyCapCents;
 
     private long id;
