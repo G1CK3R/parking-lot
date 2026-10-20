@@ -49,6 +49,9 @@ public class EntryService {
         }
 
         Lane lane = policy.chooseLane(lanes, stayClass);
+        if (lane == null) {
+            return null;
+        }
         ParkingSession session = new ParkingSession(nextTicketNumber, vehicle, lane.getCode(),
                                                     stayClass, estimatedMinutes, entryTime);
         lane.asStack().push(session);

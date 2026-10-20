@@ -52,16 +52,19 @@ public class RetrievalPlan {
         this.moves = new LinkedQueue<>();
     }
 
-
-    public void addMove(Move move) {
+    
+     public void addMove(Move move) {
         Objects.requireNonNull(move, "move não pode ser null");
         if(move.getSequence() != totalMoves + 1){
             throw new IllegalArgumentException("Movimento esperado: " + (totalMoves +1)
                 + "mas teve: "  + move.getSequence());
         }
         moves.enqueue(move);
+        totalMoves++;
+        if (move.isManoeuvre()) {
+            manoeuvreCount++;
+        }
     }
-
     /**
      * Retira e devolve o próximo movimento a reproduzir.
      *
