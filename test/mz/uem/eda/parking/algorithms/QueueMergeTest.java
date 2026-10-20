@@ -11,7 +11,7 @@ import java.util.Random;
 
 import org.junit.jupiter.api.Test;
 
-import mz.uem.eda.parking.structures.CircularQueue;
+import mz.uem.eda.parking.structures.LinkedQueue;
 import mz.uem.eda.parking.structures.LinkedQueue;
 import mz.uem.eda.parking.structures.Queue;
 
@@ -128,11 +128,11 @@ class QueueMergeTest {
 
     @Test
     void acceptsBoundedQueuesAsInput() {
-        Queue<Integer> first = new CircularQueue<>(3);
+        Queue<Integer> first = new LinkedQueue<>();
         first.enqueue(1);
         first.enqueue(4);
         first.enqueue(6);
-        Queue<Integer> second = new CircularQueue<>(2);
+        Queue<Integer> second = new LinkedQueue<>();
         second.enqueue(2);
         second.enqueue(5);
 

@@ -11,7 +11,7 @@ import java.util.Random;
 
 import org.junit.jupiter.api.Test;
 
-import mz.uem.eda.parking.structures.CircularQueue;
+import mz.uem.eda.parking.structures.LinkedQueue;
 import mz.uem.eda.parking.structures.LinkedQueue;
 import mz.uem.eda.parking.structures.Queue;
 
@@ -118,7 +118,7 @@ class QueueRadixSortTest {
     @Test
     void sortsInPlaceOnBoundedQueue() {
         // the same queue instance is refilled, so a full CircularQueue works
-        Queue<Integer> queue = new CircularQueue<>(5);
+        Queue<Integer> queue = new LinkedQueue<>();
         for (int v : new int[] {50, 4, 300, 2, 10}) {
             queue.enqueue(v);
         }

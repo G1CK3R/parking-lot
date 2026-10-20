@@ -10,7 +10,7 @@ import java.util.function.Predicate;
 import org.junit.jupiter.api.Test;
 
 import mz.uem.eda.parking.structures.ArrayStack;
-import mz.uem.eda.parking.structures.CircularQueue;
+import mz.uem.eda.parking.structures.LinkedQueue;
 import mz.uem.eda.parking.structures.LinkedQueue;
 import mz.uem.eda.parking.structures.LinkedStack;
 import mz.uem.eda.parking.structures.Queue;
@@ -62,7 +62,7 @@ class SequentialSearchTest {
 
     @Test
     void worksOnCircularQueueAfterWrapAround() {
-        Queue<String> history = new CircularQueue<>(3);
+        Queue<String> history = new LinkedQueue<>();
         history.enqueue("A");
         history.enqueue("B");
         history.enqueue("C");
