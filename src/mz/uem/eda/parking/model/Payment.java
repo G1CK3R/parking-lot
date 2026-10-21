@@ -58,6 +58,14 @@ public class Payment {
         return operator;
     }
 
+    /**
+     * @return o identificador na base de dados, ou 0 se o pagamento ainda
+     *         não foi gravado
+     */
+    public long getId() {
+        return id;
+    }
+
      public void setId(long newId) {
         if (newId <= 0) {
             throw new IllegalArgumentException("id tem de ser positivo: " + newId);

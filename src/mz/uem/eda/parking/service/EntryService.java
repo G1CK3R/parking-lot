@@ -74,4 +74,19 @@ public class EntryService {
      public int getNextTicketNumber() {
         return nextTicketNumber;
     }
+
+    /**
+     * Repõe o número do próximo talão depois de reabrir o programa, para a
+     * numeração continuar sem repetir talões já gravados. Só a camada
+     * {@code persistence} (no arranque) chama este método.
+     *
+     * @param next o número gravado na última entrada, pelo menos 1
+     * @throws IllegalArgumentException se {@code next} for menor que 1
+     */
+    public void restoreNextTicketNumber(int next) {
+        if (next < 1) {
+            throw new IllegalArgumentException("next deve ser pelo menos 1: " + next);
+        }
+        this.nextTicketNumber = next;
+    }
 }

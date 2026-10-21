@@ -40,6 +40,9 @@ public class ReservationService {
     private final Queue<Reservation> reservations;
     private int activeCount;
 
+    /** A última reserva reposta por {@link #load}, para verificar a ordem. */
+    private Reservation lastLoaded;
+
     /**
      * Cria o serviço sem reservas.
      *
@@ -186,6 +189,35 @@ public class ReservationService {
             }
         }
         return null;
+    }
+
+    /**
+     * Repõe uma reserva activa que veio da base de dados, no fim da fila. Só
+     * a camada {@code persistence} chama este método, no arranque, com as
+     * reservas pela ordem de criação.
+     *
+     * @param reservation a reserva gravada, ainda activa
+     * @throws IllegalArgumentException se a reserva não estiver activa, ou
+     *         se tiver sido criada antes da última reposta (a fila deixaria
+     *         de estar pela ordem de expiração)
+     * @throws IllegalStateException se a matrícula já tiver uma reserva
+     *         activa
+     * @complexity O(r)
+     */
+    public void load(Reservation reservation) {
+        Objects.requireNonNull(reservation, "reservation não pode ser null");
+        if (!reservation.isActive()) {
+            throw new IllegalArgumentException("só se repõem reservas activas: " + reservation);
+        }
+        if (lastLoaded != null && reservation.getCreatedAt().isBefore(lastLoaded.getCreatedAt())) {
+            throw new IllegalArgumentException("reservas fora da ordem de criação: " + reservation);
+        }
+        if (find(reservation.getPlate()) != null) {
+            throw new IllegalStateException("já existe uma reserva activa: " + reservation.getPlate());
+        }
+        reservations.enqueue(reservation);
+        activeCount++;
+        lastLoaded = reservation;
     }
 
     /** @return quantas reservas estão activas; O(1) */
