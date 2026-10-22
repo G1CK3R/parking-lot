@@ -76,7 +76,7 @@ class ParkStateRoundTripTest {
     void reopensWithTheSameStacksAndTicketNumbers() throws SQLException {
         Queue<Lane> lanes = laneRepo.loadAll();
         EntryService entry = new EntryService(lanes, new FirstWithSpace());
-        Customer ana = new Customer("Ana", "840000000", StayClass.SHORT, true);
+        Customer ana = new Customer("Ana", "840000000", true);
 
         enter(entry, lanes, new Vehicle("AAA 001 MC", Vehicle.Type.CAR, ana));
         enter(entry, lanes, new Vehicle("AAA002MC", Vehicle.Type.VAN, null));

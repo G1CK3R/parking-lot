@@ -39,7 +39,6 @@ CREATE TABLE customers (
     id            BIGINT       NOT NULL AUTO_INCREMENT,
     name          VARCHAR(100) NOT NULL,
     phone         VARCHAR(30)  NULL,
-    stay_class    VARCHAR(20)  NULL,
     preferential  BOOLEAN      NOT NULL DEFAULT FALSE,
     PRIMARY KEY (id)
 ) ENGINE = InnoDB;

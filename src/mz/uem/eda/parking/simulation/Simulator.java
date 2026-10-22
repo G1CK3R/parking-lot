@@ -69,7 +69,7 @@ public class Simulator {
     private static final LocalDateTime MIDNIGHT = LocalDateTime.of(2026, 11, 2, 0, 0);
 
     /** O cliente dos carros preferenciais: só interessa o {@code isPreferential()}. */
-    private static final Customer PREFERENTIAL = new Customer("Cliente preferencial", null, null, true);
+    private static final Customer PREFERENTIAL = new Customer("Cliente preferencial", null, true);
 
     /**
      * Simula um dia.

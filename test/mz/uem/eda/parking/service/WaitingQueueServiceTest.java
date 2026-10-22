@@ -26,8 +26,8 @@ import mz.uem.eda.parking.structures.Queue;
 class WaitingQueueServiceTest {
 
     private static final LocalDateTime T0 = LocalDateTime.of(2026, 10, 20, 8, 0);
-    private static final Customer VIP = new Customer("Ana", null, StayClass.FULL_DAY, true);
-    private static final Customer REGULAR = new Customer("Rui", null, StayClass.FULL_DAY, false);
+    private static final Customer VIP = new Customer("Ana", null, true);
+    private static final Customer REGULAR = new Customer("Rui", null, false);
 
     private Lane lane;
     private Queue<Lane> lanes;

@@ -19,21 +19,19 @@ public class Customer {
     
     private final String name;
     private final String phone;
-    private final StayClass usualStayClass;
     private final boolean preferential;
 
 
     /* Identificador na base de dados; enquanto não for gravado. */
     private long id;
 
-    public Customer(String name, String phone, StayClass usualStayClass, boolean preferential){
+    public Customer(String name, String phone, boolean preferential){
         Objects.requireNonNull(name, "O name não pode ser nulo");
         if (name.isBlank()) {
             throw new IllegalArgumentException("O name não pode ser em branco");
         }
         this.name = name.strip();
         this.phone = phone;
-        this.usualStayClass =  usualStayClass;
         this.preferential = preferential;
     }
 
@@ -43,10 +41,6 @@ public class Customer {
 
     public String getPhone() {
         return phone;
-    }
-
-    public StayClass getUsualStayClass() {
-        return usualStayClass;
     }
 
     public boolean isPreferential() {

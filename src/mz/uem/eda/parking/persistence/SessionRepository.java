@@ -168,12 +168,11 @@ public class SessionRepository {
     }
 
     private static long insertCustomer(Connection c, Customer customer) throws SQLException {
-        String sql = "INSERT INTO customers (name, phone, stay_class, preferential) VALUES (?, ?, ?, ?)";
+        String sql = "INSERT INTO customers (name, phone, preferential) VALUES (?, ?, ?)";
         try (PreparedStatement st = c.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
             st.setString(1, customer.getName());
             st.setString(2, customer.getPhone());
-            st.setString(3, customer.getUsualStayClass() == null ? null : customer.getUsualStayClass().name());
-            st.setBoolean(4, customer.isPreferential());
+            st.setBoolean(3, customer.isPreferential());
             st.executeUpdate();
             return Sql.generatedKey(st);
         }

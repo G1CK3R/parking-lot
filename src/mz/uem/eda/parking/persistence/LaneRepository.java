@@ -123,7 +123,7 @@ public class LaneRepository {
         String sql = "SELECT ls.lane_id, ls.position, l.code AS lane_code, "
                 + "s.id AS session_id, s.ticket_no, s.stay_class, s.estimated_minutes, s.entry_at, "
                 + "v.id AS vehicle_id, v.plate, v.vehicle_type, "
-                + "cu.id AS customer_id, cu.name, cu.phone, cu.stay_class AS customer_class, cu.preferential "
+                + "cu.id AS customer_id, cu.name, cu.phone, cu.preferential "
                 + "FROM lane_slots ls "
                 + "JOIN lanes l ON l.id = ls.lane_id "
                 + "JOIN parking_sessions s ON s.id = ls.session_id "
@@ -151,9 +151,7 @@ public class LaneRepository {
         Customer customer = null;
         long customerId = rs.getLong("customer_id");
         if (!rs.wasNull()) {
-            String usual = rs.getString("customer_class");
-            customer = new Customer(rs.getString("name"), rs.getString("phone"),
-                    usual == null ? null : StayClass.valueOf(usual), rs.getBoolean("preferential"));
+            customer = new Customer(rs.getString("name"), rs.getString("phone"), rs.getBoolean("preferential"));
             customer.setId(customerId);
         }
         Vehicle vehicle = new Vehicle(rs.getString("plate"), Vehicle.Type.valueOf(rs.getString("vehicle_type")),
