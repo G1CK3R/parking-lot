@@ -62,7 +62,8 @@ public class BillingService {
     /**
      * Troca a tarifa em vigor (RF13). Como {@link Tariff} é imutável, mudar
      * preços é criar uma tarifa nova e passá-la aqui. Os pagamentos já
-     * feitos não mudam.
+     * feitos não mudam: cada um guarda a tarifa com que foi calculado
+     * (ADR-031).
      *
      * @param tariff a nova tarifa
      * @throws NullPointerException se {@code tariff} for {@code null}
@@ -111,7 +112,8 @@ public class BillingService {
     /**
      * Regista o pagamento da sessão, pelo valor devido à hora do pagamento.
      * Paga-se com o carro ainda no parque: só depois se chama o
-     * {@link ExitService}.
+     * {@link ExitService}. O pagamento guarda a tarifa em vigor, com que o
+     * valor foi calculado (ADR-031).
      *
      * @param session a sessão a pagar, ainda activa
      * @param method o método de pagamento (só registado, ADR-027)
@@ -130,7 +132,7 @@ public class BillingService {
             throw new IllegalStateException("a sessão já está fechada: " + session);
         }
         long amount = amountDue(session, paidAt);
-        return new Payment(session, amount, method, paidAt, operator);
+        return new Payment(session, tariff, amount, method, paidAt, operator);
     }
 
     /**

@@ -12,7 +12,12 @@ import mz.uem.eda.parking.model.Lane;
 import mz.uem.eda.parking.model.ParkingSession;
 import mz.uem.eda.parking.model.Payment;
 import mz.uem.eda.parking.model.Reservation;
+import mz.uem.eda.parking.model.StayClass;
+import mz.uem.eda.parking.model.Tariff;
+import mz.uem.eda.parking.model.User;
 import mz.uem.eda.parking.model.Vehicle;
+import mz.uem.eda.parking.structures.LinkedQueue;
+import mz.uem.eda.parking.structures.Queue;
 
 /**
  * Grava as entradas e as saídas: sessões, talões, viaturas, clientes e
@@ -33,6 +38,9 @@ import mz.uem.eda.parking.model.Vehicle;
  *
  * <p>Os ids da base só são escritos nos objectos depois do {@code commit},
  * para nunca ficar em memória um id de uma linha que foi desfeita.
+ *
+ * <p>Também repõe o histórico dos pagamentos ({@link #loadPayments}), cada
+ * um ligado à tarifa com que foi calculado (ADR-031).
  */
 public class SessionRepository {
 
@@ -115,8 +123,8 @@ public class SessionRepository {
      * @param payment o pagamento registado pelo {@code BillingService} antes
      *        da saída
      * @throws IllegalArgumentException se a sessão ainda estiver activa, se
-     *         o pagamento for de outra sessão, ou se o operador ainda não
-     *         estiver gravado
+     *         o pagamento for de outra sessão, ou se o operador ou a tarifa
+     *         ainda não estiverem gravados
      * @throws SQLException se a gravação falhar (nada fica gravado)
      */
     public void recordExit(ParkingSession session, Lane lane, Payment payment) throws SQLException {
@@ -132,6 +140,9 @@ public class SessionRepository {
         if (payment.getOperator().getId() == 0) {
             throw new IllegalArgumentException("operador ainda não gravado: " + payment.getOperator());
         }
+        if (payment.getTariff().getId() == 0) {
+            throw new IllegalArgumentException("tarifa ainda não gravada: o pagamento tem de apontar para uma tarifa da base");
+        }
         long paymentId;
         try (Connection c = connections.open()) {
             c.setAutoCommit(false);
@@ -146,6 +157,71 @@ public class SessionRepository {
             }
         }
         payment.setId(paymentId);
+    }
+
+    /**
+     * Carrega o histórico dos pagamentos, pela ordem em que foram gravados,
+     * cada um com a sua sessão já fechada, o operador que cobrou e a tarifa
+     * com que foi calculado (ADR-031). Quem coordena passa-os, um a um, ao
+     * {@code PaymentHistoryService}.
+     *
+     * <p>A tarifa não se monta de novo a partir da linha: procura-se pelo id
+     * entre as tarifas de {@link TariffRepository#loadAll()}, para todos os
+     * pagamentos feitos com a mesma tarifa apontarem para o mesmo objecto. O
+     * operador monta-se da linha, mesmo que entretanto tenha sido
+     * desactivado: o histórico não muda quando alguém deixa de trabalhar no
+     * parque.
+     *
+     * <p>O {@code ORDER BY p.id} só repõe a ordem de gravação; os JOIN só
+     * juntam as linhas de cada pagamento. Nenhuma pergunta é respondida em
+     * SQL (ADR-012): procurar um pagamento é trabalho do serviço.
+     *
+     * @param tariffs todas as tarifas, de {@link TariffRepository#loadAll()}
+     * @return os pagamentos, o mais antigo à frente, com o id da base
+     * @throws IllegalStateException se um pagamento apontar para uma tarifa
+     *         que não está em {@code tariffs}
+     * @throws SQLException se a leitura falhar
+     * @complexity O(p · t), em que p é o número de pagamentos e t o de
+     *             tarifas: uma busca sequencial pelas tarifas por pagamento
+     */
+    public Queue<Payment> loadPayments(Iterable<Tariff> tariffs) throws SQLException {
+        Objects.requireNonNull(tariffs, "tariffs não pode ser null");
+        String sql = "SELECT p.id AS payment_id, p.tariff_id, p.amount_cents, p.method, p.paid_at, "
+                + "s.id AS session_id, s.ticket_no, s.stay_class, s.estimated_minutes, s.entry_at, "
+                + "s.exit_at, s.moves_count, l.code AS lane_code, "
+                + "v.id AS vehicle_id, v.plate, v.vehicle_type, "
+                + "cu.id AS customer_id, cu.name, cu.phone, cu.preferential, "
+                + "u.id AS user_id, u.username, u.password_hash, u.salt, u.iterations, u.role "
+                + "FROM payments p "
+                + "JOIN parking_sessions s ON s.id = p.session_id "
+                + "JOIN lanes l ON l.id = s.lane_id "
+                + "JOIN vehicles v ON v.id = s.vehicle_id "
+                + "LEFT JOIN customers cu ON cu.id = v.customer_id "
+                + "JOIN users u ON u.id = p.user_id "
+                + "ORDER BY p.id";
+        Queue<Payment> payments = new LinkedQueue<>();
+        try (Connection c = connections.open();
+                PreparedStatement st = c.prepareStatement(sql);
+                ResultSet rs = st.executeQuery()) {
+            while (rs.next()) {
+                ParkingSession session = new ParkingSession(rs.getInt("ticket_no"), LaneRepository.vehicleFrom(rs),
+                        rs.getString("lane_code"), StayClass.valueOf(rs.getString("stay_class")),
+                        rs.getInt("estimated_minutes"), Sql.getTime(rs, "entry_at"));
+                session.close(Sql.getTime(rs, "exit_at"), rs.getInt("moves_count"));
+                session.setId(rs.getLong("session_id"));
+
+                User operator = new User(rs.getString("username"), rs.getString("password_hash"),
+                        rs.getString("salt"), rs.getInt("iterations"), User.Role.valueOf(rs.getString("role")));
+                operator.setId(rs.getLong("user_id"));
+
+                Payment payment = new Payment(session, findTariff(tariffs, rs.getLong("tariff_id")),
+                        rs.getLong("amount_cents"), Payment.Method.valueOf(rs.getString("method")),
+                        Sql.getTime(rs, "paid_at"), operator);
+                payment.setId(rs.getLong("payment_id"));
+                payments.enqueue(payment);
+            }
+        }
+        return payments;
     }
 
     /**
@@ -226,19 +302,30 @@ public class SessionRepository {
     }
 
     private static long insertPayment(Connection c, Payment payment) throws SQLException {
-        String sql = "INSERT INTO payments (session_id, amount_cents, method, paid_at, user_id) "
-                + "SELECT id, ?, ?, ?, ? FROM parking_sessions WHERE ticket_no = ?";
+        String sql = "INSERT INTO payments (session_id, tariff_id, amount_cents, method, paid_at, user_id) "
+                + "SELECT id, ?, ?, ?, ?, ? FROM parking_sessions WHERE ticket_no = ?";
         try (PreparedStatement st = c.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
-            st.setLong(1, payment.getAmountCents());
-            st.setString(2, payment.getMethod().name());
-            Sql.setTime(st, 3, payment.getPaidAt());
-            st.setLong(4, payment.getOperator().getId());
-            st.setInt(5, payment.getSession().getTicketNumber());
+            st.setLong(1, payment.getTariff().getId());
+            st.setLong(2, payment.getAmountCents());
+            st.setString(3, payment.getMethod().name());
+            Sql.setTime(st, 4, payment.getPaidAt());
+            st.setLong(5, payment.getOperator().getId());
+            st.setInt(6, payment.getSession().getTicketNumber());
             if (st.executeUpdate() != 1) {
                 throw new SQLException("sessão por gravar: " + payment.getSession());
             }
             return Sql.generatedKey(st);
         }
+    }
+
+    /** Busca sequencial da tarifa pelo id da base, entre as t tarifas. */
+    private static Tariff findTariff(Iterable<Tariff> tariffs, long id) {
+        for (Tariff tariff : tariffs) {
+            if (tariff.getId() == id) {
+                return tariff;
+            }
+        }
+        throw new IllegalStateException("payments aponta para uma tarifa que não foi carregada: " + id);
     }
 
     private static void closeSession(Connection c, ParkingSession session) throws SQLException {

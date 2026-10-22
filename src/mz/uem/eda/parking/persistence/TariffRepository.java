@@ -9,13 +9,16 @@ import java.time.LocalDateTime;
 import java.util.Objects;
 
 import mz.uem.eda.parking.model.Tariff;
+import mz.uem.eda.parking.structures.LinkedQueue;
+import mz.uem.eda.parking.structures.Queue;
 
 /**
  * Guarda e repõe a tarifa em vigor (tabela {@code tariffs}).
  *
  * <p>Como {@link Tariff} é imutável, mudar preços é inserir uma tarifa nova
  * e desactivar a anterior, na mesma transacção: há sempre exactamente uma
- * activa, e as antigas ficam como histórico.
+ * activa, e as antigas ficam como histórico. Os pagamentos apontam para a
+ * tarifa com que foram calculados (ADR-031), por isso nenhuma se apaga.
  */
 public class TariffRepository {
 
@@ -53,6 +56,33 @@ public class TariffRepository {
             }
             return tariff;
         }
+    }
+
+    /**
+     * Carrega todas as tarifas, em vigor e antigas, pela ordem em que foram
+     * criadas, para ligar cada pagamento do histórico à sua (ADR-031). O
+     * {@code ORDER BY id} só repõe a ordem de gravação, como em
+     * {@code lane_slots}; não responde a nenhuma pergunta (ADR-012).
+     *
+     * @return as tarifas, a mais antiga à frente, com o id da base
+     * @throws SQLException se a leitura falhar
+     * @complexity O(t), em que t é o número de tarifas
+     */
+    public Queue<Tariff> loadAll() throws SQLException {
+        String sql = "SELECT id, free_minutes, fraction_minutes, hourly_rate_cents, daily_cap_cents "
+                + "FROM tariffs ORDER BY id";
+        Queue<Tariff> tariffs = new LinkedQueue<>();
+        try (Connection c = connections.open();
+                PreparedStatement st = c.prepareStatement(sql);
+                ResultSet rs = st.executeQuery()) {
+            while (rs.next()) {
+                Tariff tariff = new Tariff(rs.getInt("free_minutes"), rs.getInt("fraction_minutes"),
+                        rs.getLong("hourly_rate_cents"), rs.getLong("daily_cap_cents"));
+                tariff.setId(rs.getLong("id"));
+                tariffs.enqueue(tariff);
+            }
+        }
+        return tariffs;
     }
 
     /**
