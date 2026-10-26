@@ -32,7 +32,7 @@ import mz.uem.eda.parking.structures.exceptions.EmptyStructureException;
 
 public class RetrievalPlan {
 
-     private final ParkingSession target;
+    private final ParkingSession target;
     private final int depth;
     private final Queue<Move> moves;
 

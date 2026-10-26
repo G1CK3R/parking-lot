@@ -114,6 +114,7 @@ class BillingServiceTest {
         assertSame(session, payment.getSession());
         assertEquals(Payment.Method.MPESA, payment.getMethod());
         assertEquals(at, payment.getPaidAt());
+        assertSame(billing.getTariff(), payment.getTariff());       // ADR-031
     }
 
     @Test

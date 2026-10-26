@@ -2,6 +2,7 @@ package mz.uem.eda.parking.persistence;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -17,6 +18,7 @@ import mz.uem.eda.parking.model.ParkingSession;
 import mz.uem.eda.parking.model.Payment;
 import mz.uem.eda.parking.model.RetrievalPlan;
 import mz.uem.eda.parking.model.StayClass;
+import mz.uem.eda.parking.model.Tariff;
 import mz.uem.eda.parking.model.User;
 import mz.uem.eda.parking.model.Vehicle;
 import mz.uem.eda.parking.persistence.security.PasswordHasher;
@@ -24,6 +26,7 @@ import mz.uem.eda.parking.service.AuthService;
 import mz.uem.eda.parking.service.BillingService;
 import mz.uem.eda.parking.service.EntryService;
 import mz.uem.eda.parking.service.ExitService;
+import mz.uem.eda.parking.service.PaymentHistoryService;
 import mz.uem.eda.parking.service.policy.FirstWithSpace;
 import mz.uem.eda.parking.structures.Queue;
 
@@ -133,7 +136,8 @@ class ParkStateRoundTripTest {
         // sessão que nunca foi gravada: o INSERT do pagamento não encontra o talão
         Vehicle ghost = new Vehicle("ZZZ999MC", Vehicle.Type.CAR, null);
         ParkingSession unsaved = new ParkingSession(99, ghost, "C01", StayClass.SHORT, 60, T0);
-        Payment payment = new Payment(unsaved, 500, Payment.Method.CASH, T0.plusHours(1), operator);
+        Tariff tariff = new TariffRepository(db).loadActive();
+        Payment payment = new Payment(unsaved, tariff, 500, Payment.Method.CASH, T0.plusHours(1), operator);
         unsaved.close(T0.plusHours(1), 0);
         Lane emptied = Lane.parking("C01", 5, StayClass.SHORT);
 
@@ -143,18 +147,63 @@ class ParkStateRoundTripTest {
     }
 
     @Test
-    void exitRequiresAClosedSessionAndASavedOperator() throws SQLException {
+    void exitRequiresAClosedSessionASavedOperatorAndASavedTariff() throws SQLException {
         Queue<Lane> lanes = laneRepo.loadAll();
         EntryService entry = new EntryService(lanes, new FirstWithSpace());
         ParkingSession session = enter(entry, lanes, new Vehicle("AAA001MC", Vehicle.Type.CAR, null));
         User unsaved = new User("ghost", "hash", "salt", 1, User.Role.OPERATOR);
-        Payment payment = new Payment(session, 0, Payment.Method.CASH, T0, operator);
-        Payment byGhost = new Payment(session, 0, Payment.Method.CASH, T0, unsaved);
+        Tariff tariff = new TariffRepository(db).loadActive();
+        Payment payment = new Payment(session, tariff, 0, Payment.Method.CASH, T0, operator);
+        Payment byGhost = new Payment(session, tariff, 0, Payment.Method.CASH, T0, unsaved);
+        Payment unsavedTariff = new Payment(session, new Tariff(15, 15, 6000, 40000), 0,
+                Payment.Method.CASH, T0, operator);
         Lane c01 = find(lanes, "C01");
 
         assertThrows(IllegalArgumentException.class, () -> sessionRepo.recordExit(session, c01, payment));
         session.close(T0.plusMinutes(5), 0);
         assertThrows(IllegalArgumentException.class, () -> sessionRepo.recordExit(session, c01, byGhost));
+        assertThrows(IllegalArgumentException.class, () -> sessionRepo.recordExit(session, c01, unsavedTariff));
+    }
+
+    @Test
+    void paymentHistoryComesBackWithTheTariffOfTheTime() throws SQLException {
+        Queue<Lane> lanes = laneRepo.loadAll();
+        EntryService entry = new EntryService(lanes, new FirstWithSpace());
+        ExitService exit = new ExitService(lanes);
+        TariffRepository tariffRepo = new TariffRepository(db);
+        BillingService billing = new BillingService(tariffRepo.loadActive());
+        enter(entry, lanes, new Vehicle("AAA001MC", Vehicle.Type.CAR, null));
+        enter(entry, lanes, new Vehicle("AAA002MC", Vehicle.Type.CAR, null));
+
+        // o carro do fundo sai com a tarifa do seed: 2 h a 60 MZN, 2 manobras
+        leave(exit, billing, lanes, "AAA001MC", T0.plusHours(2));
+        // mudam os preços; o outro carro sai com a tarifa nova: 4 h a 80 MZN
+        Tariff newer = new Tariff(10, 30, 8000, 50000);
+        tariffRepo.replaceActive(newer, T0.plusHours(3));
+        billing.setTariff(newer);
+        leave(exit, billing, lanes, "AAA002MC", T0.plusHours(4));
+
+        // reabrir: tarifas primeiro, depois os pagamentos ligados a elas
+        Queue<Tariff> tariffs = tariffRepo.loadAll();
+        PaymentHistoryService history = new PaymentHistoryService();
+        for (Payment p : sessionRepo.loadPayments(tariffs)) {
+            history.add(p);
+        }
+
+        assertEquals(2, tariffs.size());
+        assertEquals(2, history.size());
+        Payment old = history.findByTicket(1);
+        assertEquals(12000, old.getAmountCents());
+        assertEquals(6000, old.getTariff().getHourlyRateCents());     // a tarifa já substituída
+        assertSame(tariffs.peek(), old.getTariff());                 // o mesmo objecto da fila
+        assertEquals(Payment.Method.CASH, old.getMethod());
+        assertEquals("admin", old.getOperator().getUsername());
+        assertEquals("AAA001MC", old.getSession().getVehicle().getPlate());
+        assertEquals(T0.plusHours(2), old.getSession().getExitTime());
+        assertEquals(2, old.getSession().getManoeuvres());
+        Payment recent = history.findByTicket(2);
+        assertEquals(32000, recent.getAmountCents());
+        assertEquals(newer.getId(), recent.getTariff().getId());
     }
 
     @Test
@@ -176,6 +225,15 @@ class ParkStateRoundTripTest {
     }
 
     // ---- auxiliares -----------------------------------------------------
+
+    /** Paga, tira o carro e grava a saída, como faz a interface (RF08). */
+    private void leave(ExitService exit, BillingService billing, Queue<Lane> lanes, String plate,
+            LocalDateTime at) throws SQLException {
+        ParkingSession session = exit.findByPlate(plate);
+        Payment payment = billing.pay(session, Payment.Method.CASH, at, operator);
+        exit.exitByTicket(session.getTicketNumber(), at);
+        sessionRepo.recordExit(session, find(lanes, session.getLaneCode()), payment);
+    }
 
     private ParkingSession enter(EntryService entry, Queue<Lane> lanes, Vehicle vehicle) throws SQLException {
         ParkingSession session = entry.enter(vehicle, 60, T0);

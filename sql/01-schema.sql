@@ -96,22 +96,9 @@ CREATE TABLE lane_slots (
     CONSTRAINT fk_slots_session FOREIGN KEY (session_id) REFERENCES parking_sessions (id)
 ) ENGINE = InnoDB;
 
--- Pagamentos. Gravados na mesma transacção que fecha a sessão.
-CREATE TABLE payments (
-    id            BIGINT      NOT NULL AUTO_INCREMENT,
-    session_id    BIGINT      NOT NULL,
-    amount_cents  BIGINT      NOT NULL,
-    method        VARCHAR(10) NOT NULL,
-    paid_at       DATETIME    NOT NULL,
-    user_id       BIGINT      NOT NULL,
-    PRIMARY KEY (id),
-    CONSTRAINT fk_payments_session FOREIGN KEY (session_id) REFERENCES parking_sessions (id),
-    CONSTRAINT fk_payments_user FOREIGN KEY (user_id) REFERENCES users (id),
-    CHECK (amount_cents >= 0)
-) ENGINE = InnoDB;
-
 -- Tarifas. Mudar preços é inserir uma tarifa nova e desactivar a anterior:
--- há sempre exactamente uma activa, e os pagamentos antigos não mudam.
+-- há sempre exactamente uma activa. As antigas ficam, porque os pagamentos
+-- apontam para a tarifa com que foram calculados (ADR-031).
 CREATE TABLE tariffs (
     id                 BIGINT   NOT NULL AUTO_INCREMENT,
     free_minutes       INT      NOT NULL,
@@ -121,6 +108,24 @@ CREATE TABLE tariffs (
     active             BOOLEAN  NOT NULL DEFAULT TRUE,
     created_at         DATETIME NOT NULL,
     PRIMARY KEY (id)
+) ENGINE = InnoDB;
+
+-- Pagamentos. Gravados na mesma transacção que fecha a sessão: um por
+-- sessão. Cada um guarda a tarifa com que foi calculado (ADR-031).
+CREATE TABLE payments (
+    id            BIGINT      NOT NULL AUTO_INCREMENT,
+    session_id    BIGINT      NOT NULL,
+    tariff_id     BIGINT      NOT NULL,
+    amount_cents  BIGINT      NOT NULL,
+    method        VARCHAR(10) NOT NULL,
+    paid_at       DATETIME    NOT NULL,
+    user_id       BIGINT      NOT NULL,
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_payments_session (session_id),
+    CONSTRAINT fk_payments_session FOREIGN KEY (session_id) REFERENCES parking_sessions (id),
+    CONSTRAINT fk_payments_tariff FOREIGN KEY (tariff_id) REFERENCES tariffs (id),
+    CONSTRAINT fk_payments_user FOREIGN KEY (user_id) REFERENCES users (id),
+    CHECK (amount_cents >= 0)
 ) ENGINE = InnoDB;
 
 -- Reservas. Repostas por ordem de criação, que é a ordem de expiração.

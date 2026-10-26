@@ -116,6 +116,12 @@ class RepositoryTest {
         assertEquals(8000, loaded.getHourlyRateCents());
         assertEquals(1, TestDatabase.count(db, "SELECT COUNT(*) FROM tariffs WHERE active = TRUE"));
         assertEquals(2, TestDatabase.count(db, "SELECT COUNT(*) FROM tariffs"));
+
+        // todas, a antiga à frente (ADR-031)
+        Queue<Tariff> all = repo.loadAll();
+        assertEquals(2, all.size());
+        assertEquals(seed.getId(), all.dequeue().getId());
+        assertEquals(newer.getId(), all.dequeue().getId());
     }
 
     // ---- reservas -------------------------------------------------------
