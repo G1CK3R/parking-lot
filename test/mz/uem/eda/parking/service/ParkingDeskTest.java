@@ -133,6 +133,8 @@ class ParkingDeskTest {
 
         assertNull(desk.enter("WAIT01MC", Vehicle.Type.CAR, 60, T0));
         assertEquals("WAIT01MC", desk.normalQueue().iterator().next().getVehicle().getPlate());
+        assertEquals(1, desk.normalWaitingCount());
+        assertEquals(0, desk.preferentialWaitingCount());
         assertThrows(IllegalStateException.class,
                 () -> desk.enter("WAIT01MC", Vehicle.Type.CAR, 60, T0));
 
@@ -142,6 +144,7 @@ class ParkingDeskTest {
         assertEquals(0, result.getPlan().getManoeuvreCount());
         assertEquals("WAIT01MC", result.getAdmitted().getVehicle().getPlate());
         assertFalse(desk.normalQueue().iterator().hasNext());
+        assertEquals(0, desk.normalWaitingCount());
         assertEquals("WAIT01MC -> C01", lastMove(desk));
         assertEquals(desk.totalPlaces(), TestDatabase.count(db,
                 "SELECT COUNT(*) FROM parking_sessions WHERE status = 'ACTIVE'"));
