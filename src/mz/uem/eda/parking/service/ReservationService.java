@@ -22,9 +22,9 @@ import mz.uem.eda.parking.structures.Queue;
  * sempre a próxima a expirar. Expirar é olhar para a frente e desenfileirar
  * enquanto a hora já passou; nunca é preciso procurar no meio.
  *
- * <p>O check-in acontece por qualquer ordem, por isso não se tira a reserva
- * do meio da fila: marca-se como {@code CHECKED_IN} e ela sai quando chegar à
- * frente. Um contador guarda quantas estão activas, para não percorrer a
+ * <p>O check-in e o cancelamento acontecem por qualquer ordem, por isso não
+ * se tira a reserva do meio da fila: marca-se como {@code CHECKED_IN} ou
+ * {@code CANCELLED} e ela sai quando chegar à frente. Um contador guarda quantas estão activas, para não percorrer a
  * fila a cada consulta.
  *
  * <p><b>Lugares reservados contam como ocupados</b> para quem chega sem
@@ -128,6 +128,29 @@ public class ReservationService {
         reservation.checkIn();
         activeCount--;
         return session;
+    }
+
+    /**
+     * Cancela a reserva activa desta matrícula: o lugar deixa de estar
+     * guardado. A reserva fica na fila, marcada como cancelada, e sai quando
+     * chegar à frente, como as que fizeram check-in.
+     *
+     * @param plate a matrícula
+     * @param now a hora do cancelamento, para expirar antes as vencidas
+     * @return a reserva cancelada, ou {@code null} se a matrícula não tiver
+     *         reserva activa (ou se ela já tiver expirado)
+     * @complexity O(r)
+     */
+    public Reservation cancel(String plate, LocalDateTime now) {
+        Objects.requireNonNull(now, "now não pode ser null");
+        expire(now);
+        Reservation reservation = find(plate);
+        if (reservation == null) {
+            return null;
+        }
+        reservation.cancel();
+        activeCount--;
+        return reservation;
     }
 
     /**

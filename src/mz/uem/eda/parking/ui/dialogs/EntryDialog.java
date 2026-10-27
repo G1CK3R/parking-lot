@@ -146,8 +146,11 @@ public class EntryDialog {
             session = desk.enter(text, chosen, estimated, now);
         } catch (IllegalStateException | IllegalArgumentException e) {
             // Por exemplo, o carro já está no parque ou à espera, ou a
-            // matrícula só tem espaços e hífenes.
-            showProblem(Texts.format("entry.error.refused", e.getMessage()));
+            // matrícula só tem espaços e hífenes. A frase pode ser comprida,
+            // por isso vai numa caixa de aviso e não na linha de mensagens.
+            JOptionPane.showMessageDialog(dialog, Texts.format("entry.error.refused", e.getMessage()),
+                    Texts.get("entry.title"), JOptionPane.WARNING_MESSAGE);
+            plate.requestFocusInWindow();
             return;
         } catch (SQLException e) {
             Errors.saveFailed(dialog, e);

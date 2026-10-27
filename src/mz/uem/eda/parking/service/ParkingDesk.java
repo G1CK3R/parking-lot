@@ -305,6 +305,27 @@ public class ParkingDesk {
     }
 
     /**
+     * Cancela a reserva activa de uma matrícula e grava o cancelamento. O
+     * lugar volta a ficar livre para quem chega sem reserva.
+     *
+     * @param plate a matrícula
+     * @param now a hora do cancelamento
+     * @return {@code false} se a matrícula não tiver reserva activa (por
+     *         exemplo, se já expirou)
+     * @throws IllegalStateException se ninguém estiver autenticado
+     * @throws SQLException se a gravação falhar
+     */
+    public boolean cancelReservation(String plate, LocalDateTime now) throws SQLException {
+        requireLoggedIn();
+        Reservation reservation = reservationService.cancel(plate, now);
+        if (reservation == null) {
+            return false;
+        }
+        reservationRepository.updateStatus(reservation);
+        return true;
+    }
+
+    /**
      * Procura um carro estacionado, para o diálogo de saída. Só lê: não tira
      * o carro nem cobra.
      *
@@ -532,6 +553,27 @@ public class ParkingDesk {
      */
     public Iterable<Reservation> reservations() {
         return reservationService.reservations();
+    }
+
+    /**
+     * Expira as reservas vencidas e devolve as que ficam na fila, para o
+     * ecrã de reservas. Como em {@link #reservations()}, a interface mostra
+     * só as que {@link Reservation#isActive()}.
+     *
+     * @param now a hora actual
+     * @return as reservas, da que expira primeiro para a que expira depois
+     */
+    public Iterable<Reservation> reservations(LocalDateTime now) {
+        reservationService.expire(now);
+        return reservationService.reservations();
+    }
+
+    /**
+     * @return quantas reservas estão activas
+     * @complexity O(1)
+     */
+    public int activeReservationCount() {
+        return reservationService.activeCount();
     }
 
     /** @return a tarifa em vigor */

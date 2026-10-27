@@ -33,6 +33,7 @@ import mz.uem.eda.parking.ui.dialogs.FirstAdminDialog;
 import mz.uem.eda.parking.ui.dialogs.LoginDialog;
 import mz.uem.eda.parking.ui.dialogs.PasswordDialog;
 import mz.uem.eda.parking.ui.dialogs.ReportsDialog;
+import mz.uem.eda.parking.ui.dialogs.ReservationsDialog;
 import mz.uem.eda.parking.ui.dialogs.SimulationDialog;
 import mz.uem.eda.parking.ui.dialogs.TariffDialog;
 import mz.uem.eda.parking.ui.dialogs.UsersDialog;
@@ -50,7 +51,8 @@ import mz.uem.eda.parking.ui.theme.Theme;
  * o talão ou o recibo. Durante a animação as operações ficam bloqueadas; a
  * tecla Esc salta a animação.
  *
- * <p>O menu Operações tem também o fecho de caixa (F4): o que quem está na
+ * <p>O menu Operações tem também as reservas (F5), com o número de reservas
+ * activas na barra de estado, e o fecho de caixa (F4): o que quem está na
  * sessão cobrou desde que entrou. A hora de entrada é a hora a que esta
  * janela foi criada, logo depois do login.
  *
@@ -78,6 +80,7 @@ public final class MainWindow {
     private final JLabel userStatus = new JLabel();
     private final JLabel occupancyStatus = new JLabel();
     private final JLabel tariffStatus = new JLabel();
+    private final JLabel reservationStatus = new JLabel();
     /** Quando começou o turno de quem está na sessão: a hora do login. */
     private final LocalDateTime shiftStart = LocalDateTime.now();
 
@@ -146,6 +149,8 @@ public final class MainWindow {
                 Texts.get("role." + user.getRole().name())));
         occupancyStatus.setText(Texts.format("status.occupancy",
                 String.valueOf(desk.occupiedPlaces()), String.valueOf(desk.totalPlaces())));
+        reservationStatus.setText(Texts.format("status.reservations",
+                String.valueOf(desk.activeReservationCount())));
         tariffStatus.setText(Texts.format("status.tariff",
                 Texts.money(desk.getTariff().getHourlyRateCents())));
     }
@@ -199,6 +204,16 @@ public final class MainWindow {
             }
         });
 
+        JMenuItem reservations = new JMenuItem(Texts.get("menu.operations.reservations"));
+        reservations.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_F5, 0));
+        reservations.addActionListener(new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                ReservationsDialog.show(frame, desk);
+                refresh();
+            }
+        });
+
         JMenuItem cashClose = new JMenuItem(Texts.get("menu.operations.cash"));
         cashClose.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_F4, 0));
         cashClose.addActionListener(new ActionListener() {
@@ -211,6 +226,7 @@ public final class MainWindow {
         JMenu operations = new JMenu(Texts.get("menu.operations"));
         operations.add(entry);
         operations.add(carOut);
+        operations.add(reservations);
         operations.addSeparator();
         operations.add(cashClose);
 
@@ -374,6 +390,7 @@ public final class MainWindow {
         JPanel right = new JPanel(new FlowLayout(FlowLayout.RIGHT, Theme.PADDING, 0));
         right.setOpaque(false);
         right.add(occupancyStatus);
+        right.add(reservationStatus);
         right.add(tariffStatus);
 
         JPanel bar = new JPanel(new BorderLayout());

@@ -21,8 +21,8 @@ import java.util.Objects;
  * correspondente, para a interface a mostrar sem fazer contas.
  *
  * <p>Imutável, excepto o estado, que só avança uma vez (de {@code ACTIVE}
- * para {@code CHECKED_IN} ou {@code EXPIRED}), e o identificador da base de
- * dados.
+ * para {@code CHECKED_IN}, {@code EXPIRED} ou {@code CANCELLED}), e o
+ * identificador da base de dados.
  */
 public class Reservation {
 
@@ -32,7 +32,9 @@ public class Reservation {
         /** O carro chegou e a reserva deu lugar a uma sessão. */
         CHECKED_IN,
         /** A tolerância acabou antes de o carro chegar. */
-        EXPIRED
+        EXPIRED,
+        /** O operador cancelou a reserva antes de o carro chegar. */
+        CANCELLED
     }
 
     private final String plate;
@@ -146,6 +148,17 @@ public class Reservation {
     public void expire() {
         requireActive();
         status = Status.EXPIRED;
+    }
+
+    /**
+     * Regista que a reserva foi cancelada antes de o carro chegar: o lugar
+     * volta a ficar livre para todos.
+     *
+     * @throws IllegalStateException se a reserva já não estiver activa
+     */
+    public void cancel() {
+        requireActive();
+        status = Status.CANCELLED;
     }
 
     /**

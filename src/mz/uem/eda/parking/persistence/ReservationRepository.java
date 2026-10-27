@@ -70,6 +70,27 @@ public class ReservationRepository {
     }
 
     /**
+     * Grava o estado actual de uma reserva já gravada, por exemplo depois de
+     * cancelada.
+     *
+     * @param reservation a reserva, com o id da base
+     * @throws IllegalArgumentException se a reserva ainda não tiver sido gravada
+     * @throws SQLException se a gravação falhar
+     */
+    public void updateStatus(Reservation reservation) throws SQLException {
+        Objects.requireNonNull(reservation, "reservation não pode ser null");
+        if (reservation.getId() == 0) {
+            throw new IllegalArgumentException("reserva por gravar: " + reservation);
+        }
+        try (Connection c = connections.open();
+                PreparedStatement st = c.prepareStatement("UPDATE reservations SET status = ? WHERE id = ?")) {
+            st.setString(1, reservation.getStatus().name());
+            st.setLong(2, reservation.getId());
+            st.executeUpdate();
+        }
+    }
+
+    /**
      * Grava uma reserva nova e preenche-lhe o id.
      *
      * @param reservation a reserva devolvida pelo {@code ReservationService}
