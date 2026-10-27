@@ -13,7 +13,6 @@ import javax.swing.JMenu;
 import javax.swing.JMenuBar;
 import javax.swing.JMenuItem;
 import javax.swing.JPanel;
-import javax.swing.SwingConstants;
 import javax.swing.UIManager;
 
 import mz.uem.eda.parking.model.User;
@@ -26,9 +25,8 @@ import mz.uem.eda.parking.ui.theme.Theme;
  * A janela principal: menu em cima, o painel do parque ao centro e a barra
  * de estado em baixo, com quem está a trabalhar, a ocupação e a tarifa.
  *
- * <p>Por agora o centro tem só um aviso; o {@code ParkPanel} entra no passo
- * seguinte, e os menus das operações e da administração entram com os seus
- * diálogos.
+ * <p>Ao centro está o {@link ParkPanel}. Os menus das operações e da
+ * administração entram com os seus diálogos.
  *
  * <p>Fala só com a {@link ParkingDesk}: não conhece baias, pilhas, filas nem
  * a base de dados (ADR-032).
@@ -37,6 +35,7 @@ public final class MainWindow {
 
     private final JFrame frame;
     private final ParkingDesk desk;
+    private final ParkPanel parkPanel;
     private final JLabel userStatus = new JLabel();
     private final JLabel occupancyStatus = new JLabel();
     private final JLabel tariffStatus = new JLabel();
@@ -49,9 +48,8 @@ public final class MainWindow {
         this.frame = new JFrame(Texts.get("app.title"));
 
         frame.setJMenuBar(menuBar());
-        JLabel placeholder = new JLabel(Texts.get("main.placeholder"), SwingConstants.CENTER);
-        placeholder.setForeground(Theme.MUTED);
-        frame.add(placeholder, BorderLayout.CENTER);
+        this.parkPanel = new ParkPanel(desk);
+        frame.add(parkPanel, BorderLayout.CENTER);
         frame.add(statusBar(), BorderLayout.SOUTH);
         refreshStatus();
 
@@ -86,10 +84,16 @@ public final class MainWindow {
     }
 
     /**
-     * Volta a escrever a barra de estado. Os diálogos de entrada e saída vão
+     * Mostra o estado actual do parque: redesenha as baias e volta a
+     * escrever a barra de estado. Os diálogos de entrada e saída vão
      * chamá-lo depois de cada operação.
      */
-    public void refreshStatus() {
+    public void refresh() {
+        parkPanel.repaint();
+        refreshStatus();
+    }
+
+    private void refreshStatus() {
         User user = desk.getCurrentUser();
         userStatus.setText(Texts.format("status.user", user.getUsername(),
                 Texts.get("role." + user.getRole().name())));
