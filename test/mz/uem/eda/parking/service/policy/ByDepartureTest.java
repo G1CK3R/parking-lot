@@ -12,7 +12,7 @@ import mz.uem.eda.parking.model.Lane;
 import mz.uem.eda.parking.model.ParkingSession;
 import mz.uem.eda.parking.model.StayClass;
 import mz.uem.eda.parking.model.Vehicle;
-import mz.uem.eda.parking.service.EntryService;
+import mz.uem.eda.parking.service.parking.EntryService;
 import mz.uem.eda.parking.structures.LinkedQueue;
 import mz.uem.eda.parking.structures.Queue;
 

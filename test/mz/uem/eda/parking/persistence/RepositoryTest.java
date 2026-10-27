@@ -21,9 +21,9 @@ import mz.uem.eda.parking.model.Tariff;
 import mz.uem.eda.parking.model.User;
 import mz.uem.eda.parking.model.Vehicle;
 import mz.uem.eda.parking.persistence.security.PasswordHasher;
-import mz.uem.eda.parking.service.AuthService;
-import mz.uem.eda.parking.service.EntryService;
-import mz.uem.eda.parking.service.ReservationService;
+import mz.uem.eda.parking.service.access.AuthService;
+import mz.uem.eda.parking.service.parking.EntryService;
+import mz.uem.eda.parking.service.parking.ReservationService;
 import mz.uem.eda.parking.service.policy.FirstWithSpace;
 import mz.uem.eda.parking.structures.Queue;
 

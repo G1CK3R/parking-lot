@@ -30,8 +30,16 @@ import mz.uem.eda.parking.model.User;
 import mz.uem.eda.parking.model.Vehicle;
 import mz.uem.eda.parking.persistence.ConnectionFactory;
 import mz.uem.eda.parking.persistence.TestDatabase;
+import mz.uem.eda.parking.service.access.AuthService;
 import mz.uem.eda.parking.service.policy.FirstWithSpace;
 import mz.uem.eda.parking.service.policy.StrictPriority;
+import mz.uem.eda.parking.service.reports.CashClose;
+import mz.uem.eda.parking.service.reports.RevenueLine;
+import mz.uem.eda.parking.service.reports.RevenueReport;
+import mz.uem.eda.parking.service.views.ExitResult;
+import mz.uem.eda.parking.service.views.LaneView;
+import mz.uem.eda.parking.service.views.Operation;
+import mz.uem.eda.parking.service.views.ParkedCar;
 
 /**
  * A {@link ParkingDesk} contra uma base de dados verdadeira, acabada de criar
