@@ -1,0 +1,6 @@
+# Copiar para resources/config.properties e preencher com os vossos dados.
+# O config.properties está no .gitignore: nunca o comitem.
+
+db.url=jdbc:mysql://localhost:3306/parking_lot
+db.user=parking
+db.password=a-vossa-palavra-passe

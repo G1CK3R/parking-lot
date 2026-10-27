@@ -165,6 +165,22 @@ class ParkingDeskTest {
     }
 
     @Test
+    void aCancelledReservationFreesThePlaceAndStaysCancelledAfterReopening() throws SQLException {
+        ParkingDesk desk = adminDesk();
+        desk.reserve("RES001MC", 90, T0);
+        assertEquals(1, desk.activeReservationCount());
+
+        assertTrue(desk.cancelReservation("res-001-mc", T0.plusMinutes(5)));
+        assertFalse(desk.cancelReservation("RES001MC", T0.plusMinutes(6)));
+        assertEquals(0, desk.activeReservationCount());
+        assertEquals(200, desk.freeForWalkIns(T0.plusMinutes(6)));
+        assertEquals(1, TestDatabase.count(db, "SELECT COUNT(*) FROM reservations WHERE status = 'CANCELLED'"));
+
+        ParkingDesk reopened = open();
+        assertEquals(0, reopened.activeReservationCount());
+    }
+
+    @Test
     void onlyAdminsManageUsersAndTheTariff() throws SQLException {
         ParkingDesk desk = adminDesk();
         desk.registerUser("ana", "operadora-1".toCharArray(), User.Role.OPERATOR);

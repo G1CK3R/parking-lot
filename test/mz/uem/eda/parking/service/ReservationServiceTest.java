@@ -159,6 +159,36 @@ class ReservationServiceTest {
         assertEquals("WWW001MC", waiting.admitNext(T0.plusMinutes(TOLERANCE)).getVehicle().getPlate());
     }
 
+    // ---- cancelar ---------------------------------------------------------
+
+    @Test
+    void cancelFreesThePlaceAndLeavesWhenItReachesTheFront() {
+        Reservation first = reservations.reserve("AAA001MC", 60, T0);
+        Reservation second = reservations.reserve("AAA002MC", 60, T0.plusMinutes(5));
+
+        assertEquals(second, reservations.cancel("aaa-002-mc", T0.plusMinutes(10)));
+        assertEquals(Reservation.Status.CANCELLED, second.getStatus());
+        assertEquals(1, reservations.activeCount());
+        assertEquals(2, reservations.availableForWalkIns(T0.plusMinutes(10)));
+        assertNull(reservations.cancel("AAA002MC", T0.plusMinutes(11)));
+        assertNull(reservations.checkIn(car("AAA002MC"), T0.plusMinutes(12)));
+
+        // A primeira expira; a cancelada, que estava atrás, sai logo a seguir.
+        reservations.expire(T0.plusMinutes(TOLERANCE));
+        assertEquals(Reservation.Status.EXPIRED, first.getStatus());
+        assertEquals(0, count(reservations.reservations()));
+        assertEquals(0, reservations.activeCount());
+    }
+
+    @Test
+    void anExpiredReservationCannotBeCancelled() {
+        Reservation r = reservations.reserve("AAA001MC", 60, T0);
+
+        assertNull(reservations.cancel("AAA001MC", T0.plusMinutes(TOLERANCE)));
+        assertEquals(Reservation.Status.EXPIRED, r.getStatus());
+        assertThrows(IllegalStateException.class, r::cancel);
+    }
+
     // ---- Reservation ----------------------------------------------------
 
     @Test

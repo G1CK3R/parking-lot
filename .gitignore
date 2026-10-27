@@ -3,6 +3,11 @@ sources.txt
 *.class
 .idea/
 *.iml
-.vscode/
 nbproject/private/
+
+# Cada pessoa tem o seu: nunca comitar. O que se versiona é o .example.
 resources/config.properties
+
+# A pasta .vscode/ é versionada de propósito (configuração igual para todos),
+# excepto o que o VS Code gera só para cada máquina.
+.vscode/*.log

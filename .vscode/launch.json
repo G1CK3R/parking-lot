@@ -1,0 +1,21 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "type": "java",
+            "name": "Parque de Estacionamento",
+            "request": "launch",
+            "mainClass": "mz.uem.eda.parking.Main",
+            "cwd": "${workspaceFolder}",
+            "classPaths": ["$Auto", "${workspaceFolder}/resources"]
+        },
+        {
+            "type": "java",
+            "name": "Simulação (gera o CSV)",
+            "request": "launch",
+            "mainClass": "mz.uem.eda.parking.simulation.Simulator",
+            "cwd": "${workspaceFolder}",
+            "classPaths": ["$Auto", "${workspaceFolder}/resources"]
+        }
+    ]
+}
