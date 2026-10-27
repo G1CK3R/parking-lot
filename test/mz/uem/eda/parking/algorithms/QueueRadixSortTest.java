@@ -12,7 +12,6 @@ import java.util.Random;
 import org.junit.jupiter.api.Test;
 
 import mz.uem.eda.parking.structures.LinkedQueue;
-import mz.uem.eda.parking.structures.LinkedQueue;
 import mz.uem.eda.parking.structures.Queue;
 
 class QueueRadixSortTest {

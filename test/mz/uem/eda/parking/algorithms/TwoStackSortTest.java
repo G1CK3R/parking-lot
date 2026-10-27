@@ -16,7 +16,6 @@ import mz.uem.eda.parking.structures.ArrayStack;
 import mz.uem.eda.parking.structures.LinkedStack;
 import mz.uem.eda.parking.structures.Stack;
 
-import mz.uem.eda.parking.algorithms.*;;
 
 /**
  * The sorted stack has the largest element on top, so popping it (or

@@ -11,7 +11,6 @@ import org.junit.jupiter.api.Test;
 
 import mz.uem.eda.parking.structures.ArrayStack;
 import mz.uem.eda.parking.structures.LinkedQueue;
-import mz.uem.eda.parking.structures.LinkedQueue;
 import mz.uem.eda.parking.structures.LinkedStack;
 import mz.uem.eda.parking.structures.Queue;
 import mz.uem.eda.parking.structures.Stack;
