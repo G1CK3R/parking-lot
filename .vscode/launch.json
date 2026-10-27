@@ -24,6 +24,14 @@
             "mainClass": "mz.uem.eda.parking.simulation.SearchBenchmark",
             "cwd": "${workspaceFolder}",
             "classPaths": ["$Auto", "${workspaceFolder}/resources"]
+        },
+        {
+            "type": "java",
+            "name": "Encher o parque (2/3)",
+            "request": "launch",
+            "mainClass": "mz.uem.eda.parking.demo.FillPark",
+            "cwd": "${workspaceFolder}",
+            "classPaths": ["$Auto", "${workspaceFolder}/resources"]
         }
     ]
 }

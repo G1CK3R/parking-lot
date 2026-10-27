@@ -284,10 +284,11 @@ A configuração está em `.vscode/` e é igual para todos:
 
 - `settings.json`: `src` e `test` são as pastas de código, os jars de `lib/` entram no classpath,
   ficheiros em UTF-8
-- `launch.json`: três configurações, «Parque de Estacionamento» (o programa), «Simulação (gera o
-  CSV)» (o `Simulator.main`, que escreve `docs/measurements/simulation.csv`) e «Medição da busca
-  sequencial (gera o CSV)» (o `SearchBenchmark.main`, que escreve `docs/measurements/search.csv`); as
-  três arrancam na raiz do projecto e com `resources/` no classpath
+- `launch.json`: quatro configurações, «Parque de Estacionamento» (o programa), «Simulação (gera o
+  CSV)» (o `Simulator.main`, que escreve `docs/measurements/simulation.csv`), «Medição da busca
+  sequencial (gera o CSV)» (o `SearchBenchmark.main`, que escreve `docs/measurements/search.csv`) e
+  «Encher o parque (2/3)» (o `FillPark.main`, ver [Usar o programa](#usar-o-programa)); as quatro
+  arrancam na raiz do projecto e com `resources/` no classpath
 - `extensions.json`: sugere o *Extension Pack for Java* a quem abre a pasta
 
 **Não alterem estes três ficheiros na vossa máquina.** Se for preciso mudar alguma coisa, muda-se no
@@ -345,6 +346,11 @@ Utilizadores; dar uma palavra-passe nova também desbloqueia.
 **Cópia de segurança.** Administração → Cópia de segurança… grava um ficheiro `.backup` com todas as
 tabelas. Restaurar cópia… substitui tudo o que está na base pelo conteúdo do ficheiro, numa só
 transacção (ou fica tudo da cópia, ou não muda nada); depois o programa fecha e abre-se de novo.
+
+**Encher o parque para uma demonstração.** Com o programa fechado, correr a configuração «Encher o
+parque (2/3)»: pede o login e faz entrar carros inventados (sempre os mesmos) até dois terços dos
+lugares, com entradas espalhadas pelas últimas horas. Cada entrada passa pela `ParkingDesk`, como ao
+balcão. Correr outra vez só completa o que faltar.
 
 **Perfis.** O operador vê Sessão e Operações. O administrador vê também o menu Administração. O
 administrador não se pode retirar a si próprio nem retirar o último administrador.
@@ -446,6 +452,7 @@ parking-lot/
 │   │   └── policy/              políticas de colocação e de atendimento
 │   ├── persistence/             repositórios JDBC, cópia de segurança; security/ com o PBKDF2
 │   ├── simulation/              gerador de chegadas, simulador, métricas, comparação, medição da busca
+│   ├── demo/                    FillPark: enche o parque até dois terços, para demonstrações
 │   └── ui/                      janela principal e textos
 │       ├── panels/              o parque visto de cima, o painel lateral e a animação das manobras
 │       ├── dialogs/
