@@ -64,8 +64,8 @@ public final class TariffDialog {
 
         freeMinutes = new JSpinner(new SpinnerNumberModel(active.getFreeMinutes(), 0, 240, 5));
         fractionMinutes = new JSpinner(new SpinnerNumberModel(active.getFractionMinutes(), 1, 60, 1));
-        hourly.setText(meticais(active.getHourlyRateCents()));
-        dailyCap.setText(meticais(active.getDailyCapCents()));
+        hourly.setText(Texts.amount(active.getHourlyRateCents()));
+        dailyCap.setText(Texts.amount(active.getDailyCapCents()));
 
         ActionListener save = new ActionListener() {
             @Override
@@ -218,11 +218,6 @@ public final class TariffDialog {
                 && a.getFractionMinutes() == b.getFractionMinutes()
                 && a.getHourlyRateCents() == b.getHourlyRateCents()
                 && a.getDailyCapCents() == b.getDailyCapCents();
-    }
-
-    /** Centavos para o campo de texto: 6050 dá "60,50". */
-    private static String meticais(long cents) {
-        return (cents / 100) + "," + String.format("%02d", cents % 100);
     }
 
     /**

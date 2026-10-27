@@ -74,6 +74,18 @@ public final class Texts {
     }
 
     /**
+     * Escreve um valor sem a moeda nem separador de milhares, como se
+     * escreve num campo de texto ou num CSV: {@code 6050} centavos dá
+     * {@code "60,50"}. Conta em inteiros, sem passar por {@code double}.
+     *
+     * @param cents o valor em centavos, nunca negativo
+     * @return o valor com vírgula e dois algarismos de centavos
+     */
+    public static String amount(long cents) {
+        return (cents / 100) + "," + String.format("%02d", cents % 100);
+    }
+
+    /**
      * Escreve uma duração, por exemplo {@code "12 min"} ou {@code "3 h 05 min"}.
      *
      * @param minutes a duração, em minutos

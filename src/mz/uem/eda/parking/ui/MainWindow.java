@@ -6,6 +6,7 @@ import java.awt.FlowLayout;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.awt.event.KeyEvent;
+import java.time.LocalDateTime;
 
 import javax.swing.AbstractAction;
 import javax.swing.BorderFactory;
@@ -25,11 +26,13 @@ import mz.uem.eda.parking.model.ParkingSession;
 import mz.uem.eda.parking.model.User;
 import mz.uem.eda.parking.service.ExitResult;
 import mz.uem.eda.parking.service.ParkingDesk;
+import mz.uem.eda.parking.ui.dialogs.CashCloseDialog;
 import mz.uem.eda.parking.ui.dialogs.EntryDialog;
 import mz.uem.eda.parking.ui.dialogs.ExitDialog;
 import mz.uem.eda.parking.ui.dialogs.FirstAdminDialog;
 import mz.uem.eda.parking.ui.dialogs.LoginDialog;
 import mz.uem.eda.parking.ui.dialogs.PasswordDialog;
+import mz.uem.eda.parking.ui.dialogs.ReportsDialog;
 import mz.uem.eda.parking.ui.dialogs.TariffDialog;
 import mz.uem.eda.parking.ui.dialogs.UsersDialog;
 import mz.uem.eda.parking.ui.theme.Theme;
@@ -46,8 +49,12 @@ import mz.uem.eda.parking.ui.theme.Theme;
  * o talão ou o recibo. Durante a animação as operações ficam bloqueadas; a
  * tecla Esc salta a animação.
  *
+ * <p>O menu Operações tem também o fecho de caixa (F4): o que quem está na
+ * sessão cobrou desde que entrou. A hora de entrada é a hora a que esta
+ * janela foi criada, logo depois do login.
+ *
  * <p>O menu Sessão tem, para todos, a mudança da própria palavra-passe. O
- * menu Administração (utilizadores e tarifa) só existe na janela de um
+ * menu Administração (utilizadores, tarifa e relatórios) só existe na janela de um
  * administrador: a janela constrói-se de novo a cada login, por isso um
  * operador nunca o vê. A {@code ParkingDesk} volta a recusar estas
  * operações a quem não for administrador; o menu escondido é só para não
@@ -70,6 +77,8 @@ public final class MainWindow {
     private final JLabel userStatus = new JLabel();
     private final JLabel occupancyStatus = new JLabel();
     private final JLabel tariffStatus = new JLabel();
+    /** Quando começou o turno de quem está na sessão: a hora do login. */
+    private final LocalDateTime shiftStart = LocalDateTime.now();
 
     /**
      * @param desk o balcão, já com um utilizador autenticado
@@ -189,9 +198,20 @@ public final class MainWindow {
             }
         });
 
+        JMenuItem cashClose = new JMenuItem(Texts.get("menu.operations.cash"));
+        cashClose.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_F4, 0));
+        cashClose.addActionListener(new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                CashCloseDialog.show(frame, desk, shiftStart);
+            }
+        });
+
         JMenu operations = new JMenu(Texts.get("menu.operations"));
         operations.add(entry);
         operations.add(carOut);
+        operations.addSeparator();
+        operations.add(cashClose);
 
         JMenuBar bar = new JMenuBar();
         bar.add(session);
@@ -202,7 +222,7 @@ public final class MainWindow {
         return bar;
     }
 
-    /** O menu só do administrador: utilizadores e tarifa. */
+    /** O menu só do administrador: utilizadores, tarifa e relatórios. */
     private JMenu adminMenu() {
         JMenuItem users = new JMenuItem(Texts.get("menu.admin.users"));
         users.addActionListener(new ActionListener() {
@@ -221,9 +241,19 @@ public final class MainWindow {
             }
         });
 
+        JMenuItem reports = new JMenuItem(Texts.get("menu.admin.reports"));
+        reports.addActionListener(new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                ReportsDialog.show(frame, desk);
+            }
+        });
+
         JMenu admin = new JMenu(Texts.get("menu.admin"));
         admin.add(users);
         admin.add(tariff);
+        admin.addSeparator();
+        admin.add(reports);
         return admin;
     }
 
