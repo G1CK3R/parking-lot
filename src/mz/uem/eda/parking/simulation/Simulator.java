@@ -19,13 +19,9 @@ import mz.uem.eda.parking.model.Vehicle;
 import mz.uem.eda.parking.service.EntryService;
 import mz.uem.eda.parking.service.ExitService;
 import mz.uem.eda.parking.service.WaitingQueueService;
-import mz.uem.eda.parking.service.policy.ByStayClass;
-import mz.uem.eda.parking.service.policy.FirstWithSpace;
-import mz.uem.eda.parking.service.policy.LeastOccupied;
 import mz.uem.eda.parking.service.policy.PlacementPolicy;
 import mz.uem.eda.parking.service.policy.RoundRobin;
 import mz.uem.eda.parking.service.policy.ServicePolicy;
-import mz.uem.eda.parking.service.policy.StrictPriority;
 import mz.uem.eda.parking.simulation.ArrivalGenerator.Arrival;
 import mz.uem.eda.parking.structures.LinkedQueue;
 import mz.uem.eda.parking.structures.Queue;
@@ -43,7 +39,8 @@ import mz.uem.eda.parking.structures.Queue;
  *   <li>entram os carros da fila de espera, enquanto houver lugar, pela
  *       política de atendimento;</li>
  *   <li>chegam os carros deste minuto: entram se houver lugar e ninguém à
- *       espera; senão, vão para o fim da fila.</li>
+ *       espera; senão, vão para o fim da fila;</li>
+ *   <li>regista-se a ocupação, quantos lugares ficaram ocupados (RF19).</li>
  * </ol>
  *
  * <p><b>Só pilhas e filas, também aqui.</b> As chegadas são uma fila
@@ -56,8 +53,9 @@ import mz.uem.eda.parking.structures.Queue;
  * <p>O dia simulado vai das 6h00 à meia-noite. Os carros de permanência
  * longa ficam para lá do fim.
  *
- * <p>O {@link #main} corre a comparação completa e grava o CSV em
- * {@code docs/measurements/simulation.csv}.
+ * <p>O {@link #main} corre a comparação completa ({@link Comparison}) e
+ * grava o CSV em {@code docs/measurements/simulation.csv}. O ecrã de
+ * simulação da interface corre a mesma comparação.
  */
 public class Simulator {
 
@@ -88,7 +86,7 @@ public class Simulator {
             Queue<Arrival> arrivals, long seed) {
         Objects.requireNonNull(lanes, "lanes não pode ser null");
         Objects.requireNonNull(arrivals, "arrivals não pode ser null");
-        Metrics metrics = new Metrics(layout, nameOf(placement), nameOf(service), seed);
+        Metrics metrics = new Metrics(layout, nameOf(placement), nameOf(service), seed, capacityOf(lanes));
         Stopwatch stopwatch = new Stopwatch();
         stopwatch.start();
 
@@ -138,12 +136,26 @@ public class Simulator {
                     waitingArrivals.enqueue(arrival);
                 }
             }
+
+            // 4. Ocupação no fim do minuto.
+            metrics.recordOccupancy(minute, parked.size());
         }
 
         metrics.setStillWaiting(waiting.preferentialSize() + waiting.normalSize());
         stopwatch.stop();
         metrics.setRunMillis(stopwatch.elapsedMillis());
         return metrics;
+    }
+
+    /** Quantos lugares têm as baias, sem a de manobra. */
+    private static int capacityOf(Iterable<Lane> lanes) {
+        int places = 0;
+        for (Lane lane : lanes) {
+            if (!lane.isBuffer()) {
+                places += lane.getCapacity();
+            }
+        }
+        return places;
     }
 
     /** Regista a entrada e marca a hora a que o carro vai sair. */
@@ -219,78 +231,48 @@ public class Simulator {
     /** Carros por dia: mais do que os 200 lugares, para haver fila de manhã. */
     public static final int CARS_PER_DAY = 260;
 
+    /** Percentagem de carros de clientes preferenciais. */
+    public static final int PREFERENTIAL_PERCENT = 15;
+
+    /** Erro máximo da duração declarada, em percentagem da real. */
+    public static final int ESTIMATE_ERROR_PERCENT = 20;
+
     /**
-     * Corre as 2 configurações × 3 políticas de colocação × 2 de atendimento,
-     * {@value #DAYS} dias cada, sempre com os mesmos dias para todas. Grava
-     * uma linha por dia em {@code docs/measurements/simulation.csv} e escreve
-     * na consola a média de cada combinação.
+     * Corre a comparação completa ({@link Comparison}: 2 configurações × 4
+     * políticas de colocação × 2 de atendimento, {@value #DAYS} dias cada,
+     * sempre com os mesmos dias para todas). Grava uma linha por dia em
+     * {@code docs/measurements/simulation.csv} e escreve na consola a média
+     * de cada combinação.
      *
      * @param args não usados
      * @throws IOException se não conseguir gravar o CSV
      */
     public static void main(String[] args) throws IOException {
-        ArrivalGenerator generator = new ArrivalGenerator(CARS_PER_DAY, 15, 20);
-        Simulator simulator = new Simulator();
+        Comparison comparison = new Comparison(
+                new ArrivalGenerator(CARS_PER_DAY, PREFERENTIAL_PERCENT, ESTIMATE_ERROR_PERCENT), DAYS);
         Path out = Paths.get("docs", "measurements", "simulation.csv");
         Files.createDirectories(out.getParent());
 
         try (PrintWriter csv = new PrintWriter(Files.newBufferedWriter(out, StandardCharsets.UTF_8))) {
             csv.println(Metrics.csvHeader());
             System.out.println("configuração   colocação        atendimento      manobras/saída  pico(min)  "
-                    + "espera P méd/máx  espera N méd/máx  sem lugar");
-            for (int layout = 0; layout < 2; layout++) {
-                for (int placement = 0; placement < 3; placement++) {
-                    for (int service = 0; service < 2; service++) {
-                        double avgMoves = 0;
-                        double peakMinutes = 0;
-                        double prefWait = 0;
-                        double normalWait = 0;
-                        int prefMax = 0;
-                        int normalMax = 0;
-                        int notServed = 0;
-                        String layoutName = layout == 0 ? "heterogénea" : "homogénea";
-                        String placementName = "";
-                        String serviceName = "";
-                        for (long seed = 1; seed <= DAYS; seed++) {
-                            Queue<Lane> lanes = layout == 0 ? heterogeneousLanes() : homogeneousLanes();
-                            PlacementPolicy p = placement(placement);
-                            ServicePolicy s = service(service);
-                            Metrics m = simulator.run(layoutName, lanes, p, s, generator.generate(seed), seed);
-                            csv.println(m.toCsvRow());
-                            placementName = nameOf(p);
-                            serviceName = nameOf(s);
-                            avgMoves += m.averageManoeuvres() / DAYS;
-                            peakMinutes += m.peakManoeuvreMinutes() / DAYS;
-                            prefWait += m.preferentialAverageWait() / DAYS;
-                            normalWait += m.normalAverageWait() / DAYS;
-                            prefMax = Math.max(prefMax, m.preferentialMaxWait());
-                            normalMax = Math.max(normalMax, m.normalMaxWait());
-                            notServed += m.getStillWaiting();
-                        }
-                        System.out.println(String.format(Locale.ROOT,
-                                "%-14s %-16s %-16s %14.2f %10.0f %9.0f/%-6d %9.0f/%-6d %9d",
-                                layoutName, placementName, serviceName, avgMoves, peakMinutes,
-                                prefWait, prefMax, normalWait, normalMax, notServed));
-                    }
+                    + "espera P méd/máx  espera N méd/máx  sem lugar  ocupação  hora mais cheia");
+            for (int i = 0; i < comparison.size(); i++) {
+                Summary summary = comparison.run(i);
+                for (Metrics day : summary.days()) {
+                    csv.println(day.toCsvRow());
                 }
+                System.out.println(String.format(Locale.ROOT,
+                        "%-14s %-16s %-16s %14.2f %10.0f %9.0f/%-6d %9.0f/%-6d %9d %8.0f%% %10dh",
+                        summary.getLayout(), summary.getPlacement(), summary.getService(),
+                        summary.getAverageManoeuvres(), summary.getPeakManoeuvreMinutes(),
+                        summary.getPreferentialAverageWait(), summary.getPreferentialMaxWait(),
+                        summary.getNormalAverageWait(), summary.getNormalMaxWait(), summary.getNotServed(),
+                        summary.getAverageOccupancyPercent(), summary.getBusiestHour()));
             }
         }
         System.out.println();
         System.out.println("CSV gravado em " + out.toAbsolutePath());
-    }
-
-    private static PlacementPolicy placement(int index) {
-        if (index == 0) {
-            return new FirstWithSpace();
-        }
-        if (index == 1) {
-            return new LeastOccupied();
-        }
-        return new ByStayClass();
-    }
-
-    private static ServicePolicy service(int index) {
-        return index == 0 ? new StrictPriority() : new RoundRobin(3);
     }
 
     /** O nome curto da política, para o CSV; a rotação leva o k. */

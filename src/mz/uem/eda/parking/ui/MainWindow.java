@@ -33,6 +33,7 @@ import mz.uem.eda.parking.ui.dialogs.FirstAdminDialog;
 import mz.uem.eda.parking.ui.dialogs.LoginDialog;
 import mz.uem.eda.parking.ui.dialogs.PasswordDialog;
 import mz.uem.eda.parking.ui.dialogs.ReportsDialog;
+import mz.uem.eda.parking.ui.dialogs.SimulationDialog;
 import mz.uem.eda.parking.ui.dialogs.TariffDialog;
 import mz.uem.eda.parking.ui.dialogs.UsersDialog;
 import mz.uem.eda.parking.ui.theme.Theme;
@@ -54,7 +55,7 @@ import mz.uem.eda.parking.ui.theme.Theme;
  * janela foi criada, logo depois do login.
  *
  * <p>O menu Sessão tem, para todos, a mudança da própria palavra-passe. O
- * menu Administração (utilizadores, tarifa e relatórios) só existe na janela de um
+ * menu Administração (utilizadores, tarifa, relatórios e simulação) só existe na janela de um
  * administrador: a janela constrói-se de novo a cada login, por isso um
  * operador nunca o vê. A {@code ParkingDesk} volta a recusar estas
  * operações a quem não for administrador; o menu escondido é só para não
@@ -222,7 +223,7 @@ public final class MainWindow {
         return bar;
     }
 
-    /** O menu só do administrador: utilizadores, tarifa e relatórios. */
+    /** O menu só do administrador: utilizadores, tarifa, relatórios e simulação. */
     private JMenu adminMenu() {
         JMenuItem users = new JMenuItem(Texts.get("menu.admin.users"));
         users.addActionListener(new ActionListener() {
@@ -249,11 +250,20 @@ public final class MainWindow {
             }
         });
 
+        JMenuItem simulation = new JMenuItem(Texts.get("menu.admin.simulation"));
+        simulation.addActionListener(new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                SimulationDialog.show(frame);
+            }
+        });
+
         JMenu admin = new JMenu(Texts.get("menu.admin"));
         admin.add(users);
         admin.add(tariff);
         admin.addSeparator();
         admin.add(reports);
+        admin.add(simulation);
         return admin;
     }
 

@@ -48,7 +48,8 @@ public class EntryService {
             throw new IllegalStateException("veículo já parqueado: " + vehicle.getPlate());
         }
 
-        Lane lane = policy.chooseLane(lanes, stayClass);
+        // A política recebe também a hora de saída declarada; só a ByDeparture a usa.
+        Lane lane = policy.chooseLane(lanes, stayClass, entryTime.plusMinutes(estimatedMinutes));
         if (lane == null) {
             return null;
         }

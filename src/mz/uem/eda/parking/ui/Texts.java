@@ -74,6 +74,18 @@ public final class Texts {
     }
 
     /**
+     * Escreve um número com vírgula decimal: {@code number(4.306, 2)} dá
+     * {@code "4,31"}.
+     *
+     * @param value o número
+     * @param decimals quantas casas decimais
+     * @return o número formatado
+     */
+    public static String number(double value, int decimals) {
+        return String.format(PORTUGUESE, "%." + decimals + "f", value);
+    }
+
+    /**
      * Escreve um valor sem a moeda nem separador de milhares, como se
      * escreve num campo de texto ou num CSV: {@code 6050} centavos dá
      * {@code "60,50"}. Conta em inteiros, sem passar por {@code double}.

@@ -16,6 +16,9 @@ import java.util.Objects;
  *   <li><b>Espera por fila</b>: quantos carros esperaram em cada fila, e
  *       quanto, em média e no máximo. É a métrica das políticas de
  *       atendimento; a inanição vê-se no máximo da fila normal.</li>
+ *   <li><b>Ocupação (RF19)</b>: quantos lugares estavam ocupados em cada
+ *       minuto. Dá a ocupação média do dia, o momento de maior ocupação e a
+ *       ocupação média de cada hora, para ver as horas de pico.</li>
  * </ul>
  *
  * <p>Os contadores só sobem; o {@code Simulator} chama {@link #recordEntry}
@@ -34,6 +37,7 @@ public class Metrics {
     private final String placement;
     private final String service;
     private final long seed;
+    private final int capacity;
 
     private int arrivals;
     private int entries;
@@ -49,6 +53,15 @@ public class Metrics {
     private final Wait preferential = new Wait();
     private final Wait normal = new Wait();
 
+    // Ocupação: a soma dos lugares ocupados minuto a minuto, no dia e em cada hora.
+    // Os dois vectores são só 24 contadores, um por hora do relógio, não uma colecção de dados.
+    private long occupiedMinutes;
+    private int occupancySamples;
+    private int peakOccupied;
+    private int peakOccupiedMinute;
+    private final long[] occupiedByHour = new long[24];
+    private final int[] samplesByHour = new int[24];
+
     private double runMillis;
 
     /**
@@ -56,12 +69,18 @@ public class Metrics {
      * @param placement o nome da política de colocação
      * @param service o nome da política de atendimento
      * @param seed a semente do dia simulado
+     * @param capacity quantos lugares tem o parque, sem a baia de manobra
+     * @throws IllegalArgumentException se {@code capacity} não for positiva
      */
-    public Metrics(String layout, String placement, String service, long seed) {
+    public Metrics(String layout, String placement, String service, long seed, int capacity) {
         this.layout = Objects.requireNonNull(layout, "layout não pode ser null");
         this.placement = Objects.requireNonNull(placement, "placement não pode ser null");
         this.service = Objects.requireNonNull(service, "service não pode ser null");
+        if (capacity <= 0) {
+            throw new IllegalArgumentException("capacity tem de ser positiva: " + capacity);
+        }
         this.seed = seed;
+        this.capacity = capacity;
     }
 
     /** Conta um carro que chegou ao parque. */
@@ -109,6 +128,32 @@ public class Metrics {
         }
     }
 
+    /**
+     * Regista quantos lugares estavam ocupados num minuto do dia. O
+     * {@code Simulator} chama-o uma vez por minuto, no fim do minuto.
+     *
+     * @param minute o minuto, desde a meia-noite (0 a 1439)
+     * @param occupied quantos lugares estavam ocupados
+     * @throws IllegalArgumentException se o minuto ou a ocupação estiverem
+     *         fora do intervalo
+     */
+    public void recordOccupancy(int minute, int occupied) {
+        if (minute < 0 || minute >= 24 * 60) {
+            throw new IllegalArgumentException("minuto fora do dia: " + minute);
+        }
+        if (occupied < 0 || occupied > capacity) {
+            throw new IllegalArgumentException("ocupação fora de 0.." + capacity + ": " + occupied);
+        }
+        occupiedMinutes += occupied;
+        occupancySamples++;
+        if (occupied > peakOccupied) {
+            peakOccupied = occupied;
+            peakOccupiedMinute = minute;
+        }
+        occupiedByHour[minute / 60] += occupied;
+        samplesByHour[minute / 60]++;
+    }
+
     /** Regista quantos carros ainda esperavam quando o dia acabou. */
     public void setStillWaiting(int count) {
         this.stillWaiting = count;
@@ -117,6 +162,26 @@ public class Metrics {
     /** Regista quanto tempo real a simulação demorou. */
     public void setRunMillis(double millis) {
         this.runMillis = millis;
+    }
+
+    /** @return o nome da configuração das baias */
+    public String getLayout() {
+        return layout;
+    }
+
+    /** @return o nome da política de colocação */
+    public String getPlacement() {
+        return placement;
+    }
+
+    /** @return o nome da política de atendimento */
+    public String getService() {
+        return service;
+    }
+
+    /** @return a semente do dia simulado */
+    public long getSeed() {
+        return seed;
     }
 
     public int getArrivals() {
@@ -145,6 +210,11 @@ public class Metrics {
 
     public long getPeakManoeuvres() {
         return peakManoeuvres;
+    }
+
+    /** @return quanto tempo real a simulação deste dia demorou, em milissegundos */
+    public double getRunMillis() {
+        return runMillis;
     }
 
     /** @return manobras por saída, em média; 0 se ninguém saiu */
@@ -192,24 +262,66 @@ public class Metrics {
         return normal.max;
     }
 
+    /** @return quantos lugares tem o parque, sem a baia de manobra */
+    public int getCapacity() {
+        return capacity;
+    }
+
+    /** @return a ocupação média do dia simulado, em percentagem dos lugares */
+    public double averageOccupancyPercent() {
+        return occupancySamples == 0 ? 0 : 100.0 * occupiedMinutes / ((double) occupancySamples * capacity);
+    }
+
+    /** @return o maior número de lugares ocupados ao mesmo tempo */
+    public int getPeakOccupied() {
+        return peakOccupied;
+    }
+
+    /** @return o primeiro minuto (desde a meia-noite) em que se chegou a {@link #getPeakOccupied()} */
+    public int getPeakOccupiedMinute() {
+        return peakOccupiedMinute;
+    }
+
+    /**
+     * @param hour a hora do relógio, de 0 a 23
+     * @return a ocupação média nessa hora, em percentagem; 0 se a hora não
+     *         foi simulada
+     */
+    public double hourlyOccupancyPercent(int hour) {
+        return samplesByHour[hour] == 0 ? 0
+                : 100.0 * occupiedByHour[hour] / ((double) samplesByHour[hour] * capacity);
+    }
+
+    /** @return a hora com maior ocupação média; com empate, a primeira */
+    public int busiestHour() {
+        int best = 0;
+        for (int hour = 1; hour < 24; hour++) {
+            if (hourlyOccupancyPercent(hour) > hourlyOccupancyPercent(best)) {
+                best = hour;
+            }
+        }
+        return best;
+    }
+
     /** @return o cabeçalho do CSV, com as colunas de {@link #toCsvRow()} */
     public static String csvHeader() {
         return "layout,placement,service,seed,arrivals,entries,exits,still_waiting,"
                 + "manoeuvres,avg_manoeuvres_per_exit,max_manoeuvres,pct_exits_with_manoeuvres,"
                 + "peak_exits,peak_manoeuvres,peak_manoeuvre_minutes,"
                 + "pref_waited,pref_avg_wait,pref_max_wait,normal_waited,normal_avg_wait,normal_max_wait,"
-                + "run_ms";
+                + "capacity,avg_occupancy_pct,peak_occupied,peak_occupied_at,busiest_hour,run_ms";
     }
 
     /** @return uma linha CSV, com ponto decimal, na ordem de {@link #csvHeader()} */
     public String toCsvRow() {
         return String.format(Locale.ROOT,
-                "%s,%s,%s,%d,%d,%d,%d,%d,%d,%.3f,%d,%.1f,%d,%d,%.1f,%d,%.1f,%d,%d,%.1f,%d,%.2f",
+                "%s,%s,%s,%d,%d,%d,%d,%d,%d,%.3f,%d,%.1f,%d,%d,%.1f,%d,%.1f,%d,%d,%.1f,%d,%d,%.1f,%d,%02d:%02d,%d,%.2f",
                 layout, placement, service, seed, arrivals, entries, exits, stillWaiting,
                 manoeuvres, averageManoeuvres(), maxManoeuvres, percentExitsWithManoeuvres(),
                 peakExits, peakManoeuvres, peakManoeuvreMinutes(),
                 preferential.count, preferential.average(), preferential.max,
-                normal.count, normal.average(), normal.max, runMillis);
+                normal.count, normal.average(), normal.max, capacity, averageOccupancyPercent(), peakOccupied,
+                peakOccupiedMinute / 60, peakOccupiedMinute % 60, busiestHour(), runMillis);
     }
 
     @Override
