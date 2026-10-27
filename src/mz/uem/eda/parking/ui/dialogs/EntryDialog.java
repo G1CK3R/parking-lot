@@ -30,8 +30,9 @@ import mz.uem.eda.parking.ui.theme.Theme;
  * carro tem reserva, se há lugar e em que baia fica, ou se vai para a fila
  * de espera.
  *
- * <p>No fim mostra o talão (número, baia, classe e hora) ou avisa que o
- * parque está cheio e o carro ficou à espera.
+ * <p>Se o parque estiver cheio, avisa logo que o carro ficou à espera. Se o
+ * carro entrou, devolve a sessão: a janela principal anima a entrada e só
+ * depois mostra o talão, com {@link #showTicket}.
  */
 public class EntryDialog {
 
@@ -44,7 +45,7 @@ public class EntryDialog {
     private final JSpinner hours = new JSpinner(new SpinnerNumberModel(1, 0, 720, 1));
     private final JSpinner minutes = new JSpinner(new SpinnerNumberModel(0, 0, 59, 5));
     private final JLabel message = new JLabel();
-    private boolean done;
+    private ParkingSession entered;
 
     private EntryDialog(Frame owner, ParkingDesk desk) {
         this.desk = desk;
@@ -61,13 +62,18 @@ public class EntryDialog {
         duration.add(minutes);
         duration.add(new JLabel(Texts.get("entry.minutes")));
 
-        JButton submit = new JButton(Texts.get("entry.submit"));
-        submit.addActionListener(new ActionListener() {
+        ActionListener register = new ActionListener() {
             @Override
             public void actionPerformed(ActionEvent e) {
                 submit();
             }
-        });
+        };
+        JButton submit = new JButton(Texts.get("entry.submit"));
+        submit.addActionListener(register);
+        // A caixa de texto de um JSpinner fica com o Enter para si; assim o
+        // Enter também regista a entrada depois de escrever as horas.
+        ((JSpinner.DefaultEditor) hours.getEditor()).getTextField().addActionListener(register);
+        ((JSpinner.DefaultEditor) minutes.getEditor()).getTextField().addActionListener(register);
         JButton cancel = new JButton(Texts.get("dialog.cancel"));
         cancel.addActionListener(new ActionListener() {
             @Override
@@ -96,13 +102,29 @@ public class EntryDialog {
      *
      * @param owner a janela principal, para o diálogo ficar centrado nela
      * @param desk o balcão onde se regista a entrada
-     * @return {@code true} se o parque mudou (o carro entrou ou ficou na
-     *         fila de espera), para a janela se redesenhar
+     * @return a sessão do carro que entrou, ou {@code null} se o operador
+     *         cancelou, se o carro ficou na fila de espera ou se a gravação
+     *         falhou
      */
-    public static boolean ask(Frame owner, ParkingDesk desk) {
+    public static ParkingSession ask(Frame owner, ParkingDesk desk) {
         EntryDialog screen = new EntryDialog(owner, desk);
         screen.dialog.setVisible(true);
-        return screen.done;
+        return screen.entered;
+    }
+
+    /**
+     * Mostra o talão de uma entrada: número, matrícula, baia, classe e hora.
+     *
+     * @param owner a janela principal
+     * @param session a sessão do carro que entrou
+     */
+    public static void showTicket(Frame owner, ParkingSession session) {
+        JOptionPane.showMessageDialog(owner,
+                Texts.format("entry.done", String.valueOf(session.getTicketNumber()),
+                        session.getVehicle().getPlate(), session.getLaneCode(),
+                        Texts.get("stay." + session.getStayClass().name()),
+                        session.getEntryTime().format(TIME)),
+                Texts.get("entry.done.title"), JOptionPane.INFORMATION_MESSAGE);
     }
 
     private void submit() {
@@ -128,26 +150,18 @@ public class EntryDialog {
             showProblem(Texts.format("entry.error.refused", e.getMessage()));
             return;
         } catch (SQLException e) {
-            done = true;
             Errors.saveFailed(dialog, e);
             dialog.dispose();
             return;
         }
 
-        done = true;
         dialog.dispose();
         if (session == null) {
             JOptionPane.showMessageDialog(dialog.getOwner(),
                     Texts.format("entry.queued", Vehicle.normalizePlate(text)),
                     Texts.get("entry.queued.title"), JOptionPane.WARNING_MESSAGE);
-        } else {
-            JOptionPane.showMessageDialog(dialog.getOwner(),
-                    Texts.format("entry.done", String.valueOf(session.getTicketNumber()),
-                            session.getVehicle().getPlate(), session.getLaneCode(),
-                            Texts.get("stay." + session.getStayClass().name()),
-                            session.getEntryTime().format(TIME)),
-                    Texts.get("entry.done.title"), JOptionPane.INFORMATION_MESSAGE);
         }
+        entered = session;
     }
 
     private void showProblem(String text) {

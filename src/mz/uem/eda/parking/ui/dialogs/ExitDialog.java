@@ -40,8 +40,10 @@ import mz.uem.eda.parking.ui.theme.Theme;
  * condutor pagar exactamente o que viu, mesmo que entretanto mude a fracção
  * de 15 minutos.
  *
- * <p>No fim mostra o recibo: o valor, o método, quantas manobras foram
- * precisas e, se houve, o carro que entrou da fila de espera.
+ * <p>Devolve o resultado da saída: a janela principal anima as manobras e
+ * só depois mostra o recibo, com {@link #showReceipt}: o valor, o método,
+ * quantas manobras foram precisas e, se houve, o carro que entrou da fila
+ * de espera.
  */
 public class ExitDialog {
 
@@ -64,7 +66,7 @@ public class ExitDialog {
     /** A hora a que o valor foi mostrado; é a hora de saída. */
     private LocalDateTime at;
 
-    private boolean done;
+    private ExitResult result;
 
     private ExitDialog(Frame owner, ParkingDesk desk) {
         this.desk = desk;
@@ -129,12 +131,24 @@ public class ExitDialog {
      *
      * @param owner a janela principal, para o diálogo ficar centrado nela
      * @param desk o balcão onde se faz a saída
-     * @return {@code true} se o parque mudou, para a janela se redesenhar
+     * @return o resultado da saída, ou {@code null} se o operador cancelou
+     *         ou se a gravação falhou
      */
-    public static boolean ask(Frame owner, ParkingDesk desk) {
+    public static ExitResult ask(Frame owner, ParkingDesk desk) {
         ExitDialog screen = new ExitDialog(owner, desk);
         screen.dialog.setVisible(true);
-        return screen.done;
+        return screen.result;
+    }
+
+    /**
+     * Mostra o recibo de uma saída.
+     *
+     * @param owner a janela principal
+     * @param result o resultado da saída
+     */
+    public static void showReceipt(Frame owner, ExitResult result) {
+        JOptionPane.showMessageDialog(owner, receipt(result),
+                Texts.get("exit.done.title"), JOptionPane.INFORMATION_MESSAGE);
     }
 
     /** Primeiro passo: procura o carro e mostra quanto paga se sair agora. */
@@ -176,7 +190,6 @@ public class ExitDialog {
             return;
         }
         Payment.Method method = selectedMethod();
-        ExitResult result;
         try {
             result = desk.exit(found, method, at);
         } catch (IllegalStateException | IllegalArgumentException e) {
@@ -184,19 +197,14 @@ public class ExitDialog {
             message.setText(Texts.format("exit.error.refused", e.getMessage()));
             return;
         } catch (SQLException e) {
-            done = true;
             Errors.saveFailed(dialog, e);
             dialog.dispose();
             return;
         }
-
-        done = true;
         dialog.dispose();
-        JOptionPane.showMessageDialog(dialog.getOwner(), receipt(result),
-                Texts.get("exit.done.title"), JOptionPane.INFORMATION_MESSAGE);
     }
 
-    private String receipt(ExitResult result) {
+    private static String receipt(ExitResult result) {
         Payment payment = result.getPayment();
         ParkingSession session = payment.getSession();
         String text = Texts.format("exit.done", session.getVehicle().getPlate(),

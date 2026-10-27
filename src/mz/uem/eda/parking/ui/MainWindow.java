@@ -7,6 +7,7 @@ import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.awt.event.KeyEvent;
 
+import javax.swing.AbstractAction;
 import javax.swing.BorderFactory;
 import javax.swing.JButton;
 import javax.swing.JFrame;
@@ -15,11 +16,14 @@ import javax.swing.JMenu;
 import javax.swing.JMenuBar;
 import javax.swing.JMenuItem;
 import javax.swing.JPanel;
+import javax.swing.JComponent;
 import javax.swing.JToolBar;
 import javax.swing.KeyStroke;
 import javax.swing.UIManager;
 
+import mz.uem.eda.parking.model.ParkingSession;
 import mz.uem.eda.parking.model.User;
+import mz.uem.eda.parking.service.ExitResult;
 import mz.uem.eda.parking.service.ParkingDesk;
 import mz.uem.eda.parking.ui.dialogs.EntryDialog;
 import mz.uem.eda.parking.ui.dialogs.ExitDialog;
@@ -33,8 +37,11 @@ import mz.uem.eda.parking.ui.theme.Theme;
  * ocupação e a tarifa.
  *
  * <p>A entrada e a saída abrem-se pelo menu Operações, pelos botões por
- * cima do parque ou pelas teclas F2 e F3. Depois de cada operação a janela
- * redesenha-se. O menu da administração entra com os seus ecrãs.
+ * cima do parque ou pelas teclas F2 e F3. Depois de cada operação, o
+ * {@link MoveAnimator} reproduz os movimentos no painel e só no fim aparece
+ * o talão ou o recibo. Durante a animação as operações ficam bloqueadas; a
+ * tecla Esc salta a animação. O menu da administração entra com os seus
+ * ecrãs.
  *
  * <p>Fala só com a {@link ParkingDesk}: não conhece baias, pilhas, filas nem
  * a base de dados (ADR-032).
@@ -44,6 +51,11 @@ public final class MainWindow {
     private final JFrame frame;
     private final ParkingDesk desk;
     private final ParkPanel parkPanel;
+    private final MoveAnimator animator;
+    private final JMenuItem entryItem = new JMenuItem();
+    private final JMenuItem exitItem = new JMenuItem();
+    private final JButton entryButton = new JButton();
+    private final JButton exitButton = new JButton();
     private final JLabel userStatus = new JLabel();
     private final JLabel occupancyStatus = new JLabel();
     private final JLabel tariffStatus = new JLabel();
@@ -58,7 +70,9 @@ public final class MainWindow {
         frame.setJMenuBar(menuBar());
         frame.add(toolBar(), BorderLayout.NORTH);
         this.parkPanel = new ParkPanel(desk);
+        this.animator = new MoveAnimator(parkPanel, desk);
         frame.add(parkPanel, BorderLayout.CENTER);
+        bindSkipKey();
         frame.add(statusBar(), BorderLayout.SOUTH);
         refreshStatus();
 
@@ -133,7 +147,8 @@ public final class MainWindow {
         session.addSeparator();
         session.add(exit);
 
-        JMenuItem entry = new JMenuItem(Texts.get("menu.operations.entry"));
+        JMenuItem entry = entryItem;
+        entry.setText(Texts.get("menu.operations.entry"));
         entry.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_F2, 0));
         entry.addActionListener(new ActionListener() {
             @Override
@@ -141,7 +156,8 @@ public final class MainWindow {
                 openEntry();
             }
         });
-        JMenuItem carOut = new JMenuItem(Texts.get("menu.operations.exit"));
+        JMenuItem carOut = exitItem;
+        carOut.setText(Texts.get("menu.operations.exit"));
         carOut.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_F3, 0));
         carOut.addActionListener(new ActionListener() {
             @Override
@@ -162,14 +178,16 @@ public final class MainWindow {
 
     /** Os dois botões por cima do parque, para as operações do dia-a-dia. */
     private JToolBar toolBar() {
-        JButton entry = new JButton(Texts.get("toolbar.entry"));
+        JButton entry = entryButton;
+        entry.setText(Texts.get("toolbar.entry"));
         entry.addActionListener(new ActionListener() {
             @Override
             public void actionPerformed(ActionEvent e) {
                 openEntry();
             }
         });
-        JButton carOut = new JButton(Texts.get("toolbar.exit"));
+        JButton carOut = exitButton;
+        carOut.setText(Texts.get("toolbar.exit"));
         carOut.addActionListener(new ActionListener() {
             @Override
             public void actionPerformed(ActionEvent e) {
@@ -186,16 +204,75 @@ public final class MainWindow {
         return bar;
     }
 
+    /**
+     * Entrada: tira a fotografia do parque, abre o diálogo e, se o carro
+     * entrou, anima-o da cancela até à baia e mostra o talão no fim.
+     */
     private void openEntry() {
-        if (EntryDialog.ask(frame, desk)) {
-            refresh();
+        if (animator.isRunning()) {
+            return;
         }
+        ParkScene before = ParkScene.capture(desk.lanes());
+        final ParkingSession session = EntryDialog.ask(frame, desk);
+        refresh();
+        if (session == null) {
+            return;
+        }
+        setOperationsEnabled(false);
+        animator.playEntry(before, session, new Runnable() {
+            @Override
+            public void run() {
+                setOperationsEnabled(true);
+                refresh();
+                EntryDialog.showTicket(frame, session);
+            }
+        });
     }
 
+    /**
+     * Saída: tira a fotografia do parque, abre o diálogo e, se o carro
+     * saiu, reproduz as manobras e mostra o recibo no fim.
+     */
     private void openExit() {
-        if (ExitDialog.ask(frame, desk)) {
-            refresh();
+        if (animator.isRunning()) {
+            return;
         }
+        ParkScene before = ParkScene.capture(desk.lanes());
+        final ExitResult result = ExitDialog.ask(frame, desk);
+        refresh();
+        if (result == null) {
+            return;
+        }
+        setOperationsEnabled(false);
+        animator.playExit(before, result, new Runnable() {
+            @Override
+            public void run() {
+                setOperationsEnabled(true);
+                refresh();
+                ExitDialog.showReceipt(frame, result);
+            }
+        });
+    }
+
+    /** Liga ou desliga a entrada e a saída (desligadas durante a animação). */
+    private void setOperationsEnabled(boolean enabled) {
+        entryItem.setEnabled(enabled);
+        exitItem.setEnabled(enabled);
+        entryButton.setEnabled(enabled);
+        exitButton.setEnabled(enabled);
+    }
+
+    /** A tecla Esc, em qualquer ponto da janela, salta a animação em curso. */
+    private void bindSkipKey() {
+        JComponent root = frame.getRootPane();
+        root.getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW)
+                .put(KeyStroke.getKeyStroke(KeyEvent.VK_ESCAPE, 0), "skipAnimation");
+        root.getActionMap().put("skipAnimation", new AbstractAction() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                animator.finish();
+            }
+        });
     }
 
     private JPanel statusBar() {

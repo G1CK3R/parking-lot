@@ -58,6 +58,12 @@ import mz.uem.eda.parking.ui.theme.Theme;
  * <p>As medidas não são fixas: calculam-se do tamanho do painel em cada
  * desenho, por isso o parque ocupa a janela toda, seja qual for o ecrã.
  *
+ * <p><b>Durante uma animação</b>, o {@link MoveAnimator} entrega-lhe uma
+ * {@link ParkScene} (a fotografia do parque antes da operação) e o carro em
+ * movimento. Enquanto houver fotografia, as baias desenham-se a partir dela
+ * e não das baias reais; o carro em movimento recua da boca da sua baia
+ * para o corredor, vira, segue pelo corredor e entra na baia de destino.
+ *
  * <p>As listas do {@code java.util} usadas aqui só arrumam o que se vai
  * desenhar (ADR-028); não pesquisam nem ordenam dados do parque.
  *
@@ -99,6 +105,16 @@ public final class ParkPanel extends JPanel {
     /** Os carros desenhados na última pintura, para saber o que está sob o rato. */
     private final List<CarSpot> spots = new ArrayList<>();
     private CarSpot hovered;
+
+    /** A fotografia a desenhar durante uma animação, ou {@code null} fora dela. */
+    private ParkScene scene;
+
+    // O carro em movimento, durante uma animação.
+    private ParkingSession traveller;
+    private String travellerFrom;
+    private String travellerTo;
+    private double travellerProgress;
+    private String caption;
 
     /**
      * @param desk o balcão de onde se lêem as baias
@@ -166,13 +182,201 @@ public final class ParkPanel extends JPanel {
         paintGround(g, geo);
         paintCorridor(g, geo);
         for (int i = 0; i < lanes.size(); i++) {
-            paintLane(g, geo, lanes.get(i), i);
+            paintLane(g, geo, lanes.get(i), i, carsOf(lanes.get(i)));
         }
         paintLegend(g, geo);
 
         if (hovered != null) {
             paintHighlight(g, hovered.bounds);
         }
+        if (traveller != null) {
+            paintTraveller(g, geo, lanes);
+        }
+        if (caption != null) {
+            paintCaption(g, geo);
+        }
+    }
+
+    /**
+     * Os carros de uma baia, do topo para o fundo: da fotografia, durante
+     * uma animação; da baia real, fora dela.
+     */
+    private List<ParkingSession> carsOf(LaneView lane) {
+        List<ParkingSession> cars = new ArrayList<>();
+        if (scene != null) {
+            List<ParkingSession> bottomToTop = scene.lane(lane.getCode());
+            for (int i = bottomToTop.size() - 1; i >= 0; i--) {
+                cars.add(bottomToTop.get(i));
+            }
+        } else {
+            for (ParkingSession session : lane.sessions()) {
+                cars.add(session);
+            }
+        }
+        return cars;
+    }
+
+    // ------------------------------------------------------------------
+    // Animação (chamado pelo MoveAnimator)
+    // ------------------------------------------------------------------
+
+    /**
+     * Passa a desenhar a fotografia em vez das baias reais.
+     *
+     * @param snapshot a fotografia do parque antes da operação
+     */
+    void setScene(ParkScene snapshot) {
+        scene = snapshot;
+        hovered = null;
+        repaint();
+    }
+
+    /** Volta a desenhar as baias reais. */
+    void clearScene() {
+        scene = null;
+        hovered = null;
+        repaint();
+    }
+
+    /**
+     * Mostra o carro em movimento.
+     *
+     * @param session o carro, ou {@code null} para não mostrar nenhum
+     * @param from a baia de onde sai, ou {@code null} se vem da entrada
+     * @param to a baia para onde vai, ou {@code null} se sai do parque
+     * @param progress quanto do caminho já fez, de 0 a 1
+     * @param text a legenda do movimento, ou {@code null}
+     */
+    void setTraveller(ParkingSession session, String from, String to, double progress, String text) {
+        traveller = session;
+        travellerFrom = from;
+        travellerTo = to;
+        travellerProgress = progress;
+        caption = text;
+        repaint();
+    }
+
+    /**
+     * O carro em movimento. O caminho tem até quatro pontos: o lugar de
+     * onde sai (ou a cancela de entrada), o meio do corredor em frente a
+     * essa baia, o meio do corredor em frente à baia de destino, e o lugar
+     * onde fica (ou a cancela de saída). Na baia o carro está na vertical;
+     * no corredor vira para o lado para onde vai.
+     */
+    private void paintTraveller(Graphics2D g, Geometry geo, List<LaneView> lanes) {
+        double middle = geo.mouth + geo.corridorHeight / 2;
+        double[] start = travellerFrom == null ? new double[] {MARGIN + 70, middle}
+                : slotCentre(geo, lanes, travellerFrom);
+        double[] end = travellerTo == null ? new double[] {geo.width - MARGIN - 70, middle}
+                : slotCentre(geo, lanes, travellerTo);
+        if (start == null || end == null) {
+            return;
+        }
+
+        List<double[]> path = new ArrayList<>();
+        path.add(start);
+        if (travellerFrom != null) {
+            path.add(new double[] {start[0], middle});
+        }
+        if (travellerTo != null) {
+            path.add(new double[] {end[0], middle});
+        }
+        path.add(end);
+
+        // Comprimento total do caminho e o ponto onde o carro está agora.
+        double length = 0;
+        for (int i = 1; i < path.size(); i++) {
+            length += distance(path.get(i - 1), path.get(i));
+        }
+        double target = ease(travellerProgress) * length;
+        double x = start[0];
+        double y = start[1];
+        double angle = 0;
+        for (int i = 1; i < path.size(); i++) {
+            double[] a = path.get(i - 1);
+            double[] b = path.get(i);
+            double segment = distance(a, b);
+            if (segment == 0) {
+                continue;
+            }
+            double along = Math.min(target, segment);
+            x = a[0] + (b[0] - a[0]) * along / segment;
+            y = a[1] + (b[1] - a[1]) * along / segment;
+            angle = headingOf(a, b);
+            target -= segment;
+            if (target <= 0) {
+                break;
+            }
+        }
+
+        double carLength = geo.slotHeight * 0.82;
+        double carWidth = Math.min(geo.laneWidth * 0.66, carLength * 0.47);
+        Graphics2D turned = (Graphics2D) g.create();
+        try {
+            turned.rotate(angle, x, y);
+            Rectangle2D car = new Rectangle2D.Double(x - carWidth / 2, y - carLength / 2, carWidth, carLength);
+            paintCar(turned, car, Theme.paintOf(traveller.getVehicle().getPlate()), false);
+            paintHighlight(turned, car.getBounds());
+        } finally {
+            turned.dispose();
+        }
+    }
+
+    /**
+     * O centro do lugar onde o carro em movimento estava ou vai ficar: o
+     * lugar a seguir ao topo actual da baia na fotografia.
+     *
+     * @return {x, y}, ou {@code null} se a baia não existir
+     */
+    private double[] slotCentre(Geometry geo, List<LaneView> lanes, String code) {
+        for (int column = 0; column < lanes.size(); column++) {
+            LaneView lane = lanes.get(column);
+            if (lane.getCode().equals(code)) {
+                int position = scene == null ? lane.size() : scene.lane(code).size();
+                double top = slotTop(geo.mouth, lane.getCapacity(), position, geo.slotHeight);
+                return new double[] {geo.laneX(column) + geo.laneWidth / 2, top + geo.slotHeight / 2};
+            }
+        }
+        return null;
+    }
+
+    /** Na baia o carro fica na vertical; no corredor vira para onde vai. */
+    private static double headingOf(double[] a, double[] b) {
+        double dx = b[0] - a[0];
+        double dy = b[1] - a[1];
+        if (Math.abs(dx) > Math.abs(dy)) {
+            return dx > 0 ? Math.PI / 2 : -Math.PI / 2;
+        }
+        return 0;
+    }
+
+    private static double distance(double[] a, double[] b) {
+        return Math.hypot(b[0] - a[0], b[1] - a[1]);
+    }
+
+    /** Arranca e trava suavemente: lento no início e no fim, rápido no meio. */
+    private static double ease(double t) {
+        double clamped = Math.max(0, Math.min(1, t));
+        return clamped * clamped * (3 - 2 * clamped);
+    }
+
+    /** A legenda do movimento, no topo do corredor. */
+    private void paintCaption(Graphics2D g, Geometry geo) {
+        String hint = Texts.get("anim.skip");
+        g.setFont(baseFont().deriveFont(Font.BOLD, 12f));
+        FontMetrics fm = g.getFontMetrics();
+        Font small = baseFont().deriveFont(Font.PLAIN, 11f);
+        FontMetrics sm = g.getFontMetrics(small);
+        double width = fm.stringWidth(caption) + 16 + sm.stringWidth(hint) + 16;
+        double x = geo.width / 2 - width / 2;
+        double y = geo.mouth + 6;
+        g.setColor(withAlpha(Color.BLACK, 170));
+        g.fill(new RoundRectangle2D.Double(x, y, width, 24, 12, 12));
+        g.setColor(Color.WHITE);
+        g.drawString(caption, (float) (x + 10), (float) (y + 16));
+        g.setFont(small);
+        g.setColor(TEXT_DIM);
+        g.drawString(hint, (float) (x + 10 + fm.stringWidth(caption) + 16), (float) (y + 16));
     }
 
     /** O asfalto todo, por baixo das baias e do corredor. */
@@ -247,7 +451,7 @@ public final class ParkPanel extends JPanel {
      * o topo fica junto à boca. As baias mais curtas que a mais funda têm um
      * canteiro no fundo.
      */
-    private void paintLane(Graphics2D g, Geometry geo, LaneView lane, int column) {
+    private void paintLane(Graphics2D g, Geometry geo, LaneView lane, int column, List<ParkingSession> cars) {
         double x = geo.laneX(column);
         double w = geo.laneWidth;
         double floorTop = geo.laneTop;
@@ -268,7 +472,7 @@ public final class ParkPanel extends JPanel {
         }
 
         // Os lugares livres: só o contorno pintado no chão, tracejado.
-        int size = lane.size();
+        int size = cars.size();
         g.setColor(withAlpha(Theme.PAINT, 55));
         g.setStroke(new BasicStroke(1f, BasicStroke.CAP_BUTT, BasicStroke.JOIN_MITER, 10,
                 new float[] {3, 3}, 0));
@@ -284,9 +488,9 @@ public final class ParkPanel extends JPanel {
         g.setStroke(new BasicStroke(4f));
         g.draw(new Line2D.Double(x, mouth - 2, x + w, mouth - 2));
 
-        // Os carros. sessions() vai do topo para o fundo: o primeiro tem 0 por cima.
+        // Os carros, do topo para o fundo: o primeiro tem 0 por cima.
         int depth = 0;
-        for (ParkingSession session : lane.sessions()) {
+        for (ParkingSession session : cars) {
             int position = size - 1 - depth;
             double top = slotTop(mouth, capacity, position, slot);
 
@@ -301,7 +505,7 @@ public final class ParkPanel extends JPanel {
             depth++;
         }
 
-        paintHeader(g, lane, x, w);
+        paintHeader(g, lane, x, w, size);
     }
 
     /** Onde começa o lugar de uma posição da pilha (0 = fundo, o mais afastado da boca). */
@@ -357,10 +561,10 @@ public final class ParkPanel extends JPanel {
      * e uma barra que enche. Fica com contorno vermelho quando a baia está
      * cheia.
      */
-    private void paintHeader(Graphics2D g, LaneView lane, double x, double w) {
+    private void paintHeader(Graphics2D g, LaneView lane, double x, double w, int size) {
         double y = MARGIN;
         RoundRectangle2D plate = new RoundRectangle2D.Double(x, y, w, HEADER - 6, 7, 7);
-        boolean full = lane.freeSpace() == 0;
+        boolean full = size >= lane.getCapacity();
         Color tint = lane.isBuffer() ? Theme.HAZARD : Theme.colorOf(lane.getStayClass());
 
         g.setColor(PLATE_PANEL);
@@ -384,7 +588,7 @@ public final class ParkPanel extends JPanel {
 
         g.setFont(baseFont().deriveFont(Font.PLAIN, (float) Math.min(10, w * 0.24)));
         FontMetrics sm = g.getFontMetrics();
-        String count = lane.isBuffer() ? Texts.get("park.buffer") : lane.size() + "/" + lane.getCapacity();
+        String count = lane.isBuffer() ? Texts.get("park.buffer") : size + "/" + lane.getCapacity();
         g.setColor(lane.isBuffer() ? Theme.HAZARD : (full ? Theme.FULL : TEXT_DIM));
         g.drawString(count, (float) (x + w / 2 - sm.stringWidth(count) / 2.0),
                 (float) (y + 6 + fm.getAscent() + sm.getAscent() + 1));
@@ -396,7 +600,7 @@ public final class ParkPanel extends JPanel {
             g.setColor(BAR_TRACK);
             g.fill(new RoundRectangle2D.Double(barX, barY, barW, 3, 3, 3));
             g.setColor(full ? Theme.FULL : tint);
-            g.fill(new RoundRectangle2D.Double(barX, barY, barW * lane.size() / lane.getCapacity(), 3, 3, 3));
+            g.fill(new RoundRectangle2D.Double(barX, barY, barW * size / lane.getCapacity(), 3, 3, 3));
         }
     }
 
