@@ -1,5 +1,6 @@
 package mz.uem.eda.parking.service;
 
+import java.time.DayOfWeek;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.Objects;
@@ -25,6 +26,14 @@ import mz.uem.eda.parking.model.User;
  *       tecto diário (RN03).</li>
  *   <li><b>O resto</b>: arredonda-se para cima até à fracção mínima (RN02)
  *       e cobra-se ao valor por hora, sem passar do tecto diário.</li>
+ *   <li><b>Noite e fim-de-semana (RF17)</b>: no resto, cada fracção paga o
+ *       valor da hora a que começa, o de noite entre as 20h e as 7h, e leva
+ *       o desconto do fim-de-semana se começar a um sábado ou domingo. O
+ *       arredondamento ao centavo faz-se uma só vez, no fim.</li>
+ *   <li><b>Talão perdido (RF17)</b>: se o carro sai sem talão, soma-se a
+ *       multa da tarifa.</li>
+ *   <li><b>Avença (RF16)</b>: se a matrícula tem uma avença válida, a estadia
+ *       não se paga (só a multa, se houver).</li>
  * </ol>
  *
  * <p>Exemplo com tolerância de 15 min, fracção de 15 min, 60 MZN por hora e
@@ -85,12 +94,33 @@ public class BillingService {
     public long amountDue(ParkingSession session, LocalDateTime at) {
         Objects.requireNonNull(session, "session não pode ser null");
         Objects.requireNonNull(at, "at não pode ser null");
-        return amountFor(minutesBetween(session.getEntryTime(), at));
+        return amountBetween(session.getEntryTime(), at);
     }
 
     /**
-     * Calcula o valor de uma estadia com esta duração, pelas regras da
-     * classe.
+     * O valor de uma estadia entre duas horas, com todas as regras da
+     * classe, incluindo a noite e o fim-de-semana.
+     *
+     * @param entry a hora de entrada
+     * @param exit a hora de saída
+     * @return o valor em centavos, 0 dentro da tolerância
+     * @throws IllegalArgumentException se {@code exit} for anterior a {@code entry}
+     * @complexity O(1440 / f): no pior caso uma volta por fracção do último dia
+     */
+    public long amountBetween(LocalDateTime entry, LocalDateTime exit) {
+        long minutes = minutesBetween(entry, exit);
+        if (minutes <= tariff.getFreeMinutes()) {
+            return 0;
+        }
+        long fullDays = minutes / MINUTES_PER_DAY;
+        long rest = minutes % MINUTES_PER_DAY;
+        return fullDays * tariff.getDailyCapCents() + partialDay(entry.plusDays(fullDays), rest);
+    }
+
+    /**
+     * Calcula o valor de uma estadia com esta duração, sem saber a que horas
+     * foi: tudo ao valor por hora de dia, sem desconto de fim-de-semana. Serve
+     * para comparar tarifas pela duração.
      *
      * @param minutes a duração da estadia, em minutos
      * @return o valor em centavos
@@ -106,7 +136,7 @@ public class BillingService {
         }
         long fullDays = minutes / MINUTES_PER_DAY;
         long rest = minutes % MINUTES_PER_DAY;
-        return fullDays * tariff.getDailyCapCents() + partialDay(rest);
+        return fullDays * tariff.getDailyCapCents() + partialDayAtDayRate(rest);
     }
 
     /**
@@ -133,6 +163,53 @@ public class BillingService {
         }
         long amount = amountDue(session, paidAt);
         return new Payment(session, tariff, amount, method, paidAt, operator);
+    }
+
+    /**
+     * Regista o pagamento da sessão com as regras do talão perdido e da
+     * avença (RF16, RF17).
+     *
+     * <ul>
+     * <li>Com avença válida, a estadia vale 0.</li>
+     * <li>Sem talão, soma-se a multa da tarifa.</li>
+     * <li>Se o total for 0 por causa da avença, o método fica
+     * {@link Payment.Method#PASS}; senão, é o escolhido.</li>
+     * </ul>
+     *
+     * @param session a sessão a pagar, ainda activa
+     * @param method o método escolhido para o que houver a pagar
+     * @param paidAt a hora do pagamento
+     * @param operator o operador que cobra
+     * @param lostTicket se o carro sai sem talão
+     * @param coveredByPass se a matrícula tem uma avença válida
+     * @return o pagamento
+     * @throws IllegalStateException se a sessão já estiver fechada
+     * @complexity O(1440 / f)
+     */
+    public Payment pay(ParkingSession session, Payment.Method method, LocalDateTime paidAt, User operator,
+            boolean lostTicket, boolean coveredByPass) {
+        Objects.requireNonNull(session, "session não pode ser null");
+        if (!session.isActive()) {
+            throw new IllegalStateException("a sessão já está fechada: " + session);
+        }
+        long fee = lostTicket ? tariff.getLostTicketCents() : 0;
+        long amount = quote(session, paidAt, lostTicket, coveredByPass);
+        Payment.Method charged = coveredByPass && amount == 0 ? Payment.Method.PASS : method;
+        return new Payment(session, tariff, amount, charged, paidAt, operator, fee);
+    }
+
+    /**
+     * Quanto se paga à saída, com as regras do talão perdido e da avença.
+     *
+     * @param session a sessão
+     * @param at a hora de saída
+     * @param lostTicket se o carro sai sem talão
+     * @param coveredByPass se a matrícula tem uma avença válida
+     * @return o valor em centavos
+     */
+    public long quote(ParkingSession session, LocalDateTime at, boolean lostTicket, boolean coveredByPass) {
+        long stay = coveredByPass ? 0 : amountDue(session, at);
+        return stay + (lostTicket ? tariff.getLostTicketCents() : 0);
     }
 
     /**
@@ -166,7 +243,7 @@ public class BillingService {
      *
      * @complexity O(1)
      */
-    private long partialDay(long minutes) {
+    private long partialDayAtDayRate(long minutes) {
         if (minutes == 0) {
             return 0;
         }
@@ -177,6 +254,46 @@ public class BillingService {
             return tariff.getDailyCapCents();
         }
         return amount;
+    }
+
+    /**
+     * Valor do resto de um dia que começa a {@code start}: arredonda os
+     * minutos para cima até à fracção e soma as fracções, cada uma ao valor
+     * da hora a que começa (dia ou noite) e com o desconto do fim-de-semana
+     * se começar a um sábado ou domingo. A soma faz-se em «centavos ×
+     * minutos × percentagem» e só no fim se divide, arredondando para cima
+     * ao centavo: sem noite nem desconto, o resultado é exactamente o de
+     * {@link #partialDayAtDayRate}. Nunca passa do tecto diário.
+     *
+     * @complexity O(minutes / f)
+     */
+    private long partialDay(LocalDateTime start, long minutes) {
+        if (minutes == 0) {
+            return 0;
+        }
+        int fraction = tariff.getFractionMinutes();
+        long fractions = divideRoundingUp(minutes, fraction);
+        long sum = 0;
+        for (long i = 0; i < fractions; i++) {
+            LocalDateTime begins = start.plusMinutes(i * fraction);
+            long rate = isNight(begins) ? tariff.getNightRateCents() : tariff.getHourlyRateCents();
+            int percent = isWeekend(begins) ? 100 - tariff.getWeekendDiscountPercent() : 100;
+            sum += rate * fraction * percent;
+        }
+        long amount = divideRoundingUp(sum, MINUTES_PER_HOUR * 100L);
+        return Math.min(amount, tariff.getDailyCapCents());
+    }
+
+    /** @return {@code true} se a hora for de noite, entre as 20h e as 7h */
+    static boolean isNight(LocalDateTime time) {
+        int hour = time.getHour();
+        return hour >= Tariff.NIGHT_START_HOUR || hour < Tariff.NIGHT_END_HOUR;
+    }
+
+    /** @return {@code true} se o dia for sábado ou domingo */
+    static boolean isWeekend(LocalDateTime time) {
+        DayOfWeek day = time.getDayOfWeek();
+        return day == DayOfWeek.SATURDAY || day == DayOfWeek.SUNDAY;
     }
 
     /**

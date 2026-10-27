@@ -2,9 +2,11 @@ package mz.uem.eda.parking.ui.dialogs;
 
 import java.awt.BorderLayout;
 import java.awt.Font;
+import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 
 import javax.swing.BorderFactory;
+import javax.swing.JComboBox;
 import javax.swing.JComponent;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
@@ -20,10 +22,11 @@ import mz.uem.eda.parking.ui.Texts;
 import mz.uem.eda.parking.ui.theme.Theme;
 
 /**
- * As peças comuns aos ecrãs de relatórios ({@link ReportsDialog} e
- * {@link CashCloseDialog}): tabelas só de leitura com os números alinhados
- * à direita, os cartões com um número grande e os formatos de data. Existe
- * só para os dois ecrãs não repetirem o mesmo código.
+ * As peças comuns aos ecrãs com tabelas ({@link ReportsDialog},
+ * {@link CashCloseDialog}, {@link HistoryDialog}, {@link AuditDialog} e
+ * outros): tabelas só de leitura com os números alinhados à direita, os
+ * cartões com um número grande, a escolha do período e os formatos de data.
+ * Existe só para os ecrãs não repetirem o mesmo código.
  */
 final class ReportParts {
 
@@ -31,7 +34,78 @@ final class ReportParts {
     static final DateTimeFormatter DATE_TIME = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm");
     static final DateTimeFormatter TIME = DateTimeFormatter.ofPattern("HH:mm");
 
+    /** Os períodos que se podem escolher, pela ordem da lista. */
+    static final String[] PERIODS = { "today", "yesterday", "last7", "last30", "thisMonth", "lastMonth",
+        "all" };
+
+    /** O período escolhido ao abrir: os últimos 7 dias. */
+    static final int DEFAULT_PERIOD = 2;
+
+    /** "Tudo" começa aqui; o programa não tem nada mais antigo. */
+    static final LocalDate BEGINNING = LocalDate.of(2000, 1, 1);
+
     private ReportParts() {
+    }
+
+    /** Uma lista com os períodos de {@link #PERIODS}, já nos últimos 7 dias. */
+    static JComboBox<String> periodChoice() {
+        JComboBox<String> choice = new JComboBox<>();
+        for (String key : PERIODS) {
+            choice.addItem(Texts.get("report.period." + key));
+        }
+        choice.setSelectedIndex(DEFAULT_PERIOD);
+        return choice;
+    }
+
+    /**
+     * Os dias de um período da lista.
+     *
+     * @param index a posição em {@link #PERIODS}
+     * @param today o dia de hoje
+     * @return o primeiro dia (incluído) e o dia a seguir ao último (excluído)
+     */
+    static LocalDate[] period(int index, LocalDate today) {
+        LocalDate first;
+        LocalDate end = today.plusDays(1);
+        switch (PERIODS[index]) {
+            case "today":
+                first = today;
+                break;
+            case "yesterday":
+                first = today.minusDays(1);
+                end = today;
+                break;
+            case "last7":
+                first = today.minusDays(6);
+                break;
+            case "last30":
+                first = today.minusDays(29);
+                break;
+            case "thisMonth":
+                first = today.withDayOfMonth(1);
+                break;
+            case "lastMonth":
+                first = today.withDayOfMonth(1).minusMonths(1);
+                end = today.withDayOfMonth(1);
+                break;
+            default:
+                first = BEGINNING;
+                break;
+        }
+        return new LocalDate[] { first, end };
+    }
+
+    /**
+     * O período escrito por extenso, para pôr ao lado da lista.
+     *
+     * @param first o primeiro dia
+     * @param end o dia a seguir ao último
+     */
+    static String rangeText(LocalDate first, LocalDate end) {
+        if (first.equals(BEGINNING)) {
+            return Texts.format("report.range.all", end.minusDays(1).format(DATE));
+        }
+        return Texts.format("report.range", first.format(DATE), end.minusDays(1).format(DATE));
     }
 
     /**

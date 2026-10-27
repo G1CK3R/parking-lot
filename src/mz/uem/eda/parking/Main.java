@@ -3,6 +3,7 @@ package mz.uem.eda.parking;
 import java.io.IOException;
 import java.sql.SQLException;
 import java.time.LocalDateTime;
+import java.util.Locale;
 
 import javax.swing.JOptionPane;
 import javax.swing.SwingUtilities;
@@ -56,6 +57,10 @@ public class Main {
     }
 
     private static void start() {
+        // Os textos do próprio Swing (escolher ficheiro, Sim, Não, Cancelar)
+        // saem em português. O Java só traz a tradução do Brasil; os textos do
+        // programa continuam a vir de strings_pt.properties.
+        Locale.setDefault(Locale.forLanguageTag("pt-BR"));
         Theme.apply();
 
         ConnectionFactory connections;

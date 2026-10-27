@@ -45,6 +45,11 @@ class FormPanel {
         addRow(field, Theme.GAP + Theme.GAP / 2);
     }
 
+    /** Acrescenta um campo sem etiqueta por cima, por exemplo uma caixa de escolha. */
+    void addComponent(JComponent field) {
+        addRow(field, Theme.GAP + Theme.GAP / 2);
+    }
+
     /**
      * Acrescenta a linha das mensagens de erro, a vermelho. Começa com um
      * espaço para já ocupar a altura de uma linha e o diálogo não mudar de

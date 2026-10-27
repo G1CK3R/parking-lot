@@ -40,17 +40,14 @@ public class TariffRepository {
      *         uma tarifa activa
      */
     public Tariff loadActive() throws SQLException {
-        String sql = "SELECT id, free_minutes, fraction_minutes, hourly_rate_cents, daily_cap_cents "
-                + "FROM tariffs WHERE active = TRUE";
+        String sql = "SELECT " + COLUMNS + " FROM tariffs WHERE active = TRUE";
         try (Connection c = connections.open();
                 PreparedStatement st = c.prepareStatement(sql);
                 ResultSet rs = st.executeQuery()) {
             if (!rs.next()) {
                 throw new SQLException("não há tarifa activa: correr sql/02-seed.sql");
             }
-            Tariff tariff = new Tariff(rs.getInt("free_minutes"), rs.getInt("fraction_minutes"),
-                    rs.getLong("hourly_rate_cents"), rs.getLong("daily_cap_cents"));
-            tariff.setId(rs.getLong("id"));
+            Tariff tariff = tariffFrom(rs);
             if (rs.next()) {
                 throw new SQLException("há mais de uma tarifa activa");
             }
@@ -69,17 +66,13 @@ public class TariffRepository {
      * @complexity O(t), em que t é o número de tarifas
      */
     public Queue<Tariff> loadAll() throws SQLException {
-        String sql = "SELECT id, free_minutes, fraction_minutes, hourly_rate_cents, daily_cap_cents "
-                + "FROM tariffs ORDER BY id";
+        String sql = "SELECT " + COLUMNS + " FROM tariffs ORDER BY id";
         Queue<Tariff> tariffs = new LinkedQueue<>();
         try (Connection c = connections.open();
                 PreparedStatement st = c.prepareStatement(sql);
                 ResultSet rs = st.executeQuery()) {
             while (rs.next()) {
-                Tariff tariff = new Tariff(rs.getInt("free_minutes"), rs.getInt("fraction_minutes"),
-                        rs.getLong("hourly_rate_cents"), rs.getLong("daily_cap_cents"));
-                tariff.setId(rs.getLong("id"));
-                tariffs.enqueue(tariff);
+                tariffs.enqueue(tariffFrom(rs));
             }
         }
         return tariffs;
@@ -101,8 +94,9 @@ public class TariffRepository {
             throw new IllegalStateException("tarifa já gravada: " + tariff.getId());
         }
         String insert = "INSERT INTO tariffs "
-                + "(free_minutes, fraction_minutes, hourly_rate_cents, daily_cap_cents, active, created_at) "
-                + "VALUES (?, ?, ?, ?, TRUE, ?)";
+                + "(free_minutes, fraction_minutes, hourly_rate_cents, daily_cap_cents, night_rate_cents, "
+                + "weekend_discount_pct, lost_ticket_cents, monthly_pass_cents, active, created_at) "
+                + "VALUES (?, ?, ?, ?, ?, ?, ?, ?, TRUE, ?)";
         long id;
         try (Connection c = connections.open()) {
             c.setAutoCommit(false);
@@ -115,7 +109,11 @@ public class TariffRepository {
                     st.setInt(2, tariff.getFractionMinutes());
                     st.setLong(3, tariff.getHourlyRateCents());
                     st.setLong(4, tariff.getDailyCapCents());
-                    Sql.setTime(st, 5, now);
+                    st.setLong(5, tariff.getNightRateCents());
+                    st.setInt(6, tariff.getWeekendDiscountPercent());
+                    st.setLong(7, tariff.getLostTicketCents());
+                    st.setLong(8, tariff.getMonthlyPassCents());
+                    Sql.setTime(st, 9, now);
                     st.executeUpdate();
                     id = Sql.generatedKey(st);
                 }
@@ -126,5 +124,18 @@ public class TariffRepository {
             }
         }
         tariff.setId(id);
+    }
+
+    /** As colunas de uma tarifa, pela ordem que {@link #tariffFrom} lê. */
+    private static final String COLUMNS = "id, free_minutes, fraction_minutes, hourly_rate_cents, daily_cap_cents, "
+            + "night_rate_cents, weekend_discount_pct, lost_ticket_cents, monthly_pass_cents";
+
+    /** Monta a tarifa da linha actual, com o id da base. */
+    private static Tariff tariffFrom(ResultSet rs) throws SQLException {
+        Tariff tariff = new Tariff(rs.getInt("free_minutes"), rs.getInt("fraction_minutes"),
+                rs.getLong("hourly_rate_cents"), rs.getLong("daily_cap_cents"), rs.getLong("night_rate_cents"),
+                rs.getInt("weekend_discount_pct"), rs.getLong("lost_ticket_cents"), rs.getLong("monthly_pass_cents"));
+        tariff.setId(rs.getLong("id"));
+        return tariff;
     }
 }

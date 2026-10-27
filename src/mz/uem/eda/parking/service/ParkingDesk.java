@@ -1,10 +1,15 @@
 package mz.uem.eda.parking.service;
 
+import java.io.IOException;
+import java.nio.file.Path;
 import java.sql.SQLException;
 import java.time.LocalDateTime;
+import java.time.YearMonth;
 import java.util.Objects;
 
+import mz.uem.eda.parking.model.AuditEntry;
 import mz.uem.eda.parking.model.Lane;
+import mz.uem.eda.parking.model.MonthlyPass;
 import mz.uem.eda.parking.model.Move;
 import mz.uem.eda.parking.model.ParkingSession;
 import mz.uem.eda.parking.model.Payment;
@@ -13,8 +18,11 @@ import mz.uem.eda.parking.model.RetrievalPlan;
 import mz.uem.eda.parking.model.Tariff;
 import mz.uem.eda.parking.model.User;
 import mz.uem.eda.parking.model.Vehicle;
+import mz.uem.eda.parking.persistence.AuditRepository;
+import mz.uem.eda.parking.persistence.BackupRepository;
 import mz.uem.eda.parking.persistence.ConnectionFactory;
 import mz.uem.eda.parking.persistence.LaneRepository;
+import mz.uem.eda.parking.persistence.MonthlyPassRepository;
 import mz.uem.eda.parking.persistence.ReservationRepository;
 import mz.uem.eda.parking.persistence.SessionRepository;
 import mz.uem.eda.parking.persistence.TariffRepository;
@@ -23,7 +31,9 @@ import mz.uem.eda.parking.persistence.security.PasswordHasher;
 import mz.uem.eda.parking.service.policy.PlacementPolicy;
 import mz.uem.eda.parking.service.policy.ServicePolicy;
 import mz.uem.eda.parking.structures.LinkedQueue;
+import mz.uem.eda.parking.structures.LinkedStack;
 import mz.uem.eda.parking.structures.Queue;
+import mz.uem.eda.parking.structures.Stack;
 
 /**
  * O balcão do parque: a única classe da camada {@code service} que a
@@ -56,6 +66,17 @@ import mz.uem.eda.parking.structures.Queue;
  * saída, a interface usa a mesma hora para {@link #quote} e para
  * {@link #exit}, para o valor mostrado ser exactamente o valor cobrado.
  *
+ * <p><b>Desfazer.</b> As entradas e as reservas ficam numa pilha de
+ * operações ({@link Operation}); {@link #undo} tira a do topo e faz o
+ * contrário. A pilha esvazia-se a cada saída, quando o operador muda e
+ * quando um carro entra da fila de espera.
+ *
+ * <p><b>Auditoria (RF23).</b> As operações sensíveis (logins, utilizadores,
+ * tarifa, multas, avenças, cancelamentos, desfazer, cópias de segurança)
+ * ficam registadas depois de gravadas. A hora do registo é a da operação
+ * quando o método a recebe; nos outros (gestão de utilizadores, por
+ * exemplo), é a do relógio.
+ *
  * <p>Pensada para um só posto de atendimento: guarda um utilizador
  * autenticado de cada vez.
  */
@@ -77,13 +98,20 @@ public class ParkingDesk {
     private final WaitingQueueService waitingService;
     private final AuthService authService;
     private final PaymentHistoryService paymentHistory;
+    private final MonthlyPassService passService;
+    private final AuditService auditService;
 
     private final SessionRepository sessionRepository;
     private final UserRepository userRepository;
     private final TariffRepository tariffRepository;
     private final ReservationRepository reservationRepository;
+    private final MonthlyPassRepository passRepository;
+    private final AuditRepository auditRepository;
+    private final BackupRepository backupRepository;
 
     private final Queue<Move> recentMoves;
+    /** As operações que se podem desfazer, a última no topo. */
+    private final Stack<Operation> operations = new LinkedStack<>();
     private User currentUser;
 
     /**
@@ -116,6 +144,9 @@ public class ParkingDesk {
         this.userRepository = new UserRepository(connections);
         this.tariffRepository = new TariffRepository(connections);
         this.reservationRepository = new ReservationRepository(connections);
+        this.passRepository = new MonthlyPassRepository(connections);
+        this.auditRepository = new AuditRepository(connections);
+        this.backupRepository = new BackupRepository(connections);
 
         this.lanes = laneRepository.loadAll();
         this.laneViews = new LinkedQueue<>();
@@ -144,6 +175,15 @@ public class ParkingDesk {
         this.paymentHistory = new PaymentHistoryService();
         for (Payment payment : sessionRepository.loadPayments(tariffRepository.loadAll())) {
             paymentHistory.add(payment);
+        }
+
+        this.passService = new MonthlyPassService();
+        for (MonthlyPass pass : passRepository.loadAll()) {
+            passService.load(pass);
+        }
+        this.auditService = new AuditService();
+        for (AuditEntry entry : auditRepository.loadAll()) {
+            auditService.add(entry);
         }
 
         this.recentMoves = new LinkedQueue<>();
@@ -177,26 +217,87 @@ public class ParkingDesk {
         User admin = authService.createFirstAdmin(username, password);
         userRepository.insert(admin);
         currentUser = admin;
+        clearOperations();
+        record(LocalDateTime.now(), AuditEntry.Action.FIRST_ADMIN, admin.getUsername());
         return admin;
     }
 
     /**
+     * Autentica um utilizador à hora do relógio.
+     *
+     * @see #login(String, char[], LocalDateTime)
+     */
+    public User login(String username, char[] password) throws SQLException {
+        return login(username, password, LocalDateTime.now());
+    }
+
+    /**
      * Autentica um utilizador. Se as credenciais estiverem erradas, fica
-     * ninguém autenticado.
+     * ninguém autenticado. Cinco palavras-passe erradas seguidas bloqueiam a
+     * conta durante 15 minutos (RF03); o estado do bloqueio fica gravado.
+     * Cada tentativa fica no registo de auditoria.
      *
      * @param username o nome de utilizador
      * @param password a palavra-passe
+     * @param now a hora da tentativa
      * @return o utilizador autenticado, ou {@code null} se o nome ou a
-     *         palavra-passe estiverem errados
+     *         palavra-passe estiverem errados, ou se a conta estiver
+     *         bloqueada ({@link #lockedUntil} diz qual)
+     * @throws SQLException se a gravação do bloqueio ou do registo falhar
      */
-    public User login(String username, char[] password) {
-        currentUser = authService.login(username, password);
+    public User login(String username, char[] password, LocalDateTime now) throws SQLException {
+        Objects.requireNonNull(username, "username não pode ser null");
+        User known = authService.find(username);
+        int attemptsBefore = known == null ? 0 : known.getFailedAttempts();
+        LocalDateTime lockBefore = known == null ? null : known.getLockedUntil();
+
+        currentUser = authService.login(username, password, now);
+        clearOperations();
+
+        if (known != null && (attemptsBefore != known.getFailedAttempts()
+                || !Objects.equals(lockBefore, known.getLockedUntil()))) {
+            userRepository.updateLockState(known);
+        }
+        if (currentUser != null) {
+            record(now, AuditEntry.Action.LOGIN);
+        } else {
+            String typed = username.length() > 50 ? username.substring(0, 50) : username;
+            recordAs(now, typed, AuditEntry.Action.LOGIN_FAILED, typed);
+            if (known != null && known.isLockedAt(now) && !Objects.equals(lockBefore, known.getLockedUntil())) {
+                recordAs(now, typed, AuditEntry.Action.ACCOUNT_LOCKED, typed, known.getLockedUntil());
+            }
+        }
         return currentUser;
     }
 
-    /** Termina a sessão de trabalho: fica ninguém autenticado. */
-    public void logout() {
+    /**
+     * Diz se uma conta está bloqueada, para o ecrã de login explicar porque
+     * não entrou.
+     *
+     * @param username o nome de utilizador
+     * @param now a hora
+     * @return até quando está bloqueada, ou {@code null} se não estiver (ou
+     *         se o nome não existir)
+     */
+    public LocalDateTime lockedUntil(String username, LocalDateTime now) {
+        User user = username == null ? null : authService.find(username);
+        return user != null && user.isLockedAt(now) ? user.getLockedUntil() : null;
+    }
+
+    /**
+     * Termina a sessão de trabalho: fica ninguém autenticado, e a pilha de
+     * operações esvazia-se.
+     *
+     * @throws SQLException se a gravação do registo de auditoria falhar (a
+     *         sessão termina na mesma)
+     */
+    public void logout() throws SQLException {
+        User leaving = currentUser;
         currentUser = null;
+        clearOperations();
+        if (leaving != null) {
+            recordAs(LocalDateTime.now(), leaving.getUsername(), AuditEntry.Action.LOGOUT);
+        }
     }
 
     /** @return o utilizador autenticado, ou {@code null} se não houver */
@@ -220,12 +321,23 @@ public class ParkingDesk {
             return false;
         }
         userRepository.updateCredentials(currentUser);
+        record(LocalDateTime.now(), AuditEntry.Action.PASSWORD_CHANGED);
         return true;
     }
 
     // ------------------------------------------------------------------
     // Operações do operador
     // ------------------------------------------------------------------
+
+    /**
+     * Faz entrar um carro que não é cliente preferencial.
+     *
+     * @see #enter(String, Vehicle.Type, int, boolean, LocalDateTime)
+     */
+    public ParkingSession enter(String plate, Vehicle.Type type, int estimatedMinutes,
+            LocalDateTime now) throws SQLException {
+        return enter(plate, type, estimatedMinutes, false, now);
+    }
 
     /**
      * Faz entrar um carro. Há três caminhos:
@@ -235,13 +347,18 @@ public class ParkingDesk {
      * <li>se houver um lugar que não esteja reservado, a política escolhe a
      * baia e o carro entra;</li>
      * <li>se não houver, o carro vai para a fila de espera e o método
-     * devolve {@code null}.</li>
+     * devolve {@code null}. Vai para a fila preferencial se o operador
+     * marcou o cliente como preferencial (idoso, grávida, pessoa com
+     * deficiência).</li>
      * </ol>
+     * A operação fica na pilha de operações, para se poder desfazer.
      *
      * @param plate a matrícula, com ou sem espaços e hífenes
      * @param type o tipo de viatura
      * @param estimatedMinutes a duração estimada que o condutor indicou, em
      *        minutos; é ignorada se o carro tiver reserva
+     * @param preferentialCustomer se o operador marcou o cliente como
+     *        preferencial; só conta se o carro ficar à espera
      * @param now a hora de chegada
      * @return a sessão do carro estacionado, ou {@code null} se ficou na fila
      *         de espera
@@ -254,7 +371,7 @@ public class ParkingDesk {
      *             baias, nos n carros estacionados e nos w em espera
      */
     public ParkingSession enter(String plate, Vehicle.Type type, int estimatedMinutes,
-            LocalDateTime now) throws SQLException {
+            boolean preferentialCustomer, LocalDateTime now) throws SQLException {
         requireLoggedIn();
         Objects.requireNonNull(now, "now não pode ser null");
         Vehicle vehicle = new Vehicle(plate, type, null);
@@ -274,10 +391,12 @@ public class ParkingDesk {
         }
 
         if (session == null) {
-            waitingService.join(vehicle, estimatedMinutes, now);
+            waitingService.join(vehicle, estimatedMinutes, now, preferentialCustomer);
+            operations.push(Operation.queued(vehicle));
             return null;
         }
         recordEntry(session, reservation);
+        operations.push(Operation.entry(session));
         return session;
     }
 
@@ -300,13 +419,15 @@ public class ParkingDesk {
         Reservation reservation = reservationService.reserve(plate, estimatedMinutes, now);
         if (reservation != null) {
             reservationRepository.insert(reservation);
+            operations.push(Operation.reservation(reservation));
         }
         return reservation;
     }
 
     /**
      * Cancela a reserva activa de uma matrícula e grava o cancelamento. O
-     * lugar volta a ficar livre para quem chega sem reserva.
+     * lugar volta a ficar livre para quem chega sem reserva: se houver carros
+     * à espera, o primeiro entra logo (ver {@link #admitWaiting}).
      *
      * @param plate a matrícula
      * @param now a hora do cancelamento
@@ -322,7 +443,123 @@ public class ParkingDesk {
             return false;
         }
         reservationRepository.updateStatus(reservation);
+        record(now, AuditEntry.Action.RESERVATION_CANCELLED, reservation.getPlate());
+        operations.push(Operation.cancellation(reservation));
+        admitWaiting(now);
         return true;
+    }
+
+    /**
+     * Desfaz a última operação que ainda está na pilha de operações:
+     * <ul>
+     * <li><b>entrada</b>: o carro sai do topo da baia sem pagar, o talão
+     * fica anulado e o lugar volta a ficar livre;</li>
+     * <li><b>ida para a fila</b>: o carro sai da fila de espera;</li>
+     * <li><b>reserva</b>: a reserva fica cancelada;</li>
+     * <li><b>cancelamento</b>: a reserva volta a estar activa, até à mesma
+     * hora.</li>
+     * </ul>
+     * Se a operação já não se puder desfazer (por exemplo, o cancelamento de
+     * uma reserva que entretanto expirou), sai da pilha na mesma e o método
+     * lança {@link IllegalStateException}.
+     *
+     * @param now a hora
+     * @return a operação desfeita
+     * @throws IllegalStateException se ninguém estiver autenticado, se não
+     *         houver nada para desfazer, ou se a operação já não se puder
+     *         desfazer
+     * @throws SQLException se a gravação falhar
+     * @complexity O(1) para tirar da pilha; mais O(w) na fila de espera e
+     *             O(r + B) numa reserva
+     */
+    public Operation undo(LocalDateTime now) throws SQLException {
+        requireLoggedIn();
+        Objects.requireNonNull(now, "now não pode ser null");
+        if (operations.isEmpty()) {
+            throw new IllegalStateException("não há nada para desfazer");
+        }
+        Operation operation = operations.pop();
+        switch (operation.getType()) {
+            case ENTRY:
+                undoEntry(operation.getSession(), now);
+                break;
+            case QUEUED:
+                if (!waitingService.remove(operation.getVehicle())) {
+                    throw new IllegalStateException("o carro já não está à espera: " + operation.getPlate());
+                }
+                record(now, AuditEntry.Action.QUEUE_UNDONE, operation.getPlate());
+                break;
+            case RESERVATION:
+                Reservation made = operation.getReservation();
+                if (reservationService.cancel(made.getPlate(), now) != made) {
+                    throw new IllegalStateException("a reserva já não está activa: " + made.getPlate());
+                }
+                reservationRepository.updateStatus(made);
+                record(now, AuditEntry.Action.RESERVATION_UNDONE, made.getPlate());
+                admitWaiting(now);
+                break;
+            default: // CANCELLATION
+                Reservation cancelled = operation.getReservation();
+                if (!reservationService.reactivate(cancelled, now)) {
+                    throw new IllegalStateException("a reserva já não pode voltar: " + cancelled.getPlate());
+                }
+                reservationRepository.updateStatus(cancelled);
+                record(now, AuditEntry.Action.CANCELLATION_UNDONE, cancelled.getPlate());
+                break;
+        }
+        return operation;
+    }
+
+    /**
+     * @return {@code true} se houver uma operação para desfazer
+     * @complexity O(1)
+     */
+    public boolean canUndo() {
+        return currentUser != null && !operations.isEmpty();
+    }
+
+    /**
+     * @return a operação que {@link #undo} desfaz a seguir, para a interface
+     *         escrever no menu o que vai desfazer; {@code null} se não houver
+     * @complexity O(1)
+     */
+    public Operation lastOperation() {
+        return operations.isEmpty() ? null : operations.peek();
+    }
+
+    /**
+     * Faz entrar os carros em espera enquanto houver lugar livre sem reserva.
+     * A saída já o faz para o lugar que liberta; isto serve para os lugares
+     * que ficam livres de outra maneira: uma reserva cancelada ou expirada,
+     * ou uma entrada desfeita. A interface chama-o também de 30 em 30
+     * segundos, por causa das reservas que expiram sozinhas.
+     *
+     * <p>Se algum carro entrar, a pilha de operações esvazia-se: a ordem das
+     * baias deixou de ser a das operações empilhadas.
+     *
+     * @param now a hora de entrada
+     * @return as sessões dos carros que entraram, pela ordem; vazia se
+     *         nenhum entrou
+     * @throws SQLException se a gravação falhar
+     * @complexity O(a·(B + n)), com a carros admitidos
+     */
+    public Iterable<ParkingSession> admitWaiting(LocalDateTime now) throws SQLException {
+        Objects.requireNonNull(now, "now não pode ser null");
+        Queue<ParkingSession> admitted = new LinkedQueue<>();
+        if (waitingService.isEmpty()) {
+            return admitted;
+        }
+        reservationService.expire(now);
+        ParkingSession session = waitingService.admitNext(now);
+        while (session != null) {
+            recordEntry(session, null);
+            admitted.enqueue(session);
+            session = waitingService.admitNext(now);
+        }
+        if (!admitted.isEmpty()) {
+            clearOperations();
+        }
+        return admitted;
     }
 
     /**
@@ -345,14 +582,41 @@ public class ParkingDesk {
     }
 
     /**
-     * Diz quanto o carro paga se sair à hora indicada.
+     * Diz quanto o carro paga se sair à hora indicada, com talão.
+     *
+     * @see #quote(ParkingSession, LocalDateTime, boolean)
+     */
+    public long quote(ParkingSession session, LocalDateTime at) {
+        return quote(session, at, false);
+    }
+
+    /**
+     * Diz quanto o carro paga se sair à hora indicada: a estadia (0 se a
+     * matrícula tiver avença válida) mais a multa, se perdeu o talão.
      *
      * @param session a sessão do carro
      * @param at a hora de saída; a mesma que se vai passar a {@link #exit}
+     * @param lostTicket se o carro sai sem talão
      * @return o valor em centavos de metical
+     * @complexity O(a + 1440 / f), com a avenças vendidas
      */
-    public long quote(ParkingSession session, LocalDateTime at) {
-        return billingService.amountDue(session, at);
+    public long quote(ParkingSession session, LocalDateTime at, boolean lostTicket) {
+        Objects.requireNonNull(session, "session não pode ser null");
+        boolean covered = passService.validFor(session.getVehicle().getPlate(), at) != null;
+        return billingService.quote(session, at, lostTicket, covered);
+    }
+
+    /**
+     * A avença que cobre esta matrícula a esta hora, para o diálogo de
+     * saída avisar o operador.
+     *
+     * @param plate a matrícula
+     * @param at a hora
+     * @return a avença, ou {@code null} se não houver
+     * @complexity O(a)
+     */
+    public MonthlyPass validPass(String plate, LocalDateTime at) {
+        return passService.validFor(plate, at);
     }
 
     /**
@@ -381,6 +645,29 @@ public class ParkingDesk {
      */
     public ExitResult exit(ParkingSession session, Payment.Method method, LocalDateTime at)
             throws SQLException {
+        return exit(session, method, at, false);
+    }
+
+    /**
+     * Cobra e tira o carro do parque, como {@link #exit(ParkingSession,
+     * Payment.Method, LocalDateTime)}, com as regras da avença e do talão
+     * perdido: com avença válida a estadia vale 0 (e o método fica
+     * {@link Payment.Method#PASS} se não houver nada a pagar); sem talão,
+     * soma-se a multa da tarifa, e a saída fica no registo de auditoria.
+     * A pilha de operações esvazia-se: uma saída não se desfaz.
+     *
+     * @param session a sessão devolvida por {@link #findForExit}
+     * @param method o método de pagamento escolhido
+     * @param at a hora de saída; a mesma usada em {@link #quote}
+     * @param lostTicket se o carro sai sem talão
+     * @return o pagamento, o plano de movimentos e o carro que entrou da fila
+     * @throws IllegalStateException se ninguém estiver autenticado ou se a
+     *         sessão já estiver fechada
+     * @throws IllegalArgumentException se o carro já não estiver no parque
+     * @throws SQLException se a gravação falhar
+     */
+    public ExitResult exit(ParkingSession session, Payment.Method method, LocalDateTime at,
+            boolean lostTicket) throws SQLException {
         requireLoggedIn();
         Objects.requireNonNull(session, "session não pode ser null");
         Objects.requireNonNull(method, "method não pode ser null");
@@ -388,7 +675,12 @@ public class ParkingDesk {
             throw new IllegalStateException("a sessão já está fechada: " + session);
         }
 
-        Payment payment = billingService.pay(session, method, at, currentUser);
+        if (method == Payment.Method.PASS) {
+            throw new IllegalArgumentException("o método PASS só é atribuído pela avença");
+        }
+        boolean covered = passService.validFor(session.getVehicle().getPlate(), at) != null;
+        Payment payment = billingService.pay(session, method, at, currentUser, lostTicket, covered);
+        clearOperations();
         RetrievalPlan plan = exitService.exitByTicket(session.getTicketNumber(), at);
         if (plan == null) {
             throw new IllegalArgumentException("o carro não está no parque: " + session);
@@ -398,12 +690,91 @@ public class ParkingDesk {
         for (Move move : plan.moves()) {
             remember(move);
         }
+        if (lostTicket) {
+            record(at, AuditEntry.Action.LOST_TICKET, session.getVehicle().getPlate(),
+                    session.getTicketNumber(), payment.getLostTicketCents());
+        }
 
         ParkingSession admitted = waitingService.admitNext(at);
         if (admitted != null) {
             recordEntry(admitted, null);
         }
         return new ExitResult(payment, plan, admitted);
+    }
+
+    // ------------------------------------------------------------------
+    // Avenças e pesquisa
+    // ------------------------------------------------------------------
+
+    /**
+     * Vende uma avença mensal (RF16): a matrícula passa a sair sem pagar a
+     * estadia durante o mês. O valor é o da tarifa em vigor e conta na
+     * receita e no fecho de caixa de quem vende.
+     *
+     * @param customerName o nome do cliente
+     * @param phone o telefone, ou {@code null}
+     * @param plate a matrícula
+     * @param month o mês que a avença cobre; o actual ou um seguinte
+     * @param method o método de pagamento
+     * @param now a hora da venda
+     * @return a avença vendida e gravada
+     * @throws IllegalStateException se ninguém estiver autenticado, ou se a
+     *         matrícula já tiver avença para esse mês
+     * @throws IllegalArgumentException se o mês já tiver passado, ou se o
+     *         nome, a matrícula ou o método não servirem
+     * @throws SQLException se a gravação falhar
+     */
+    public MonthlyPass sellPass(String customerName, String phone, String plate, YearMonth month,
+            Payment.Method method, LocalDateTime now) throws SQLException {
+        requireLoggedIn();
+        MonthlyPass pass = passService.sell(customerName, phone, plate, month, method, now, currentUser,
+                getTariff());
+        passRepository.insert(pass);
+        record(now, AuditEntry.Action.PASS_SOLD, pass.getPlate(), pass.getMonth(), pass.getAmountCents());
+        return pass;
+    }
+
+    /**
+     * @return todas as avenças vendidas, pela ordem de venda
+     * @throws IllegalStateException se ninguém estiver autenticado
+     */
+    public Iterable<MonthlyPass> passes() {
+        requireLoggedIn();
+        return passService.passes();
+    }
+
+    /**
+     * Pesquisa de viaturas estacionadas (RF09): percorre as baias pela ordem
+     * da configuração e, em cada uma, os carros do topo para o fundo, e
+     * guarda os que servem. Diz também a profundidade de cada carro, que é o
+     * que custa tirá-lo.
+     *
+     * @param text um pedaço da matrícula (com ou sem espaços e hífenes), ou
+     *        o número exacto do talão; vazio para todos
+     * @return os carros encontrados, pela ordem das baias
+     * @throws IllegalStateException se ninguém estiver autenticado
+     * @complexity O(n), busca sequencial por todos os carros estacionados
+     */
+    public Iterable<ParkedCar> parkedCars(String text) {
+        requireLoggedIn();
+        String typed = text == null ? "" : text.strip();
+        String wanted = Vehicle.normalizePlate(typed);
+        int ticket = isTicketNumber(typed) ? Integer.parseInt(typed) : -1;
+        Queue<ParkedCar> found = new LinkedQueue<>();
+        for (Lane lane : lanes) {
+            if (lane.isBuffer()) {
+                continue;
+            }
+            int depth = 0;
+            for (ParkingSession session : lane.contents()) {
+                boolean byPlate = session.getVehicle().getPlate().contains(wanted);
+                if (byPlate || session.getTicketNumber() == ticket) {
+                    found.enqueue(new ParkedCar(session, depth));
+                }
+                depth++;
+            }
+        }
+        return found;
     }
 
     // ------------------------------------------------------------------
@@ -436,11 +807,13 @@ public class ParkingDesk {
     public User registerUser(String username, char[] password, User.Role role) throws SQLException {
         User user = authService.register(currentUser, username, password, role);
         userRepository.insert(user);
+        record(LocalDateTime.now(), AuditEntry.Action.USER_CREATED, user.getUsername(), user.getRole());
         return user;
     }
 
     /**
-     * Dá uma palavra-passe nova a um utilizador que se esqueceu da sua.
+     * Dá uma palavra-passe nova a um utilizador que se esqueceu da sua. Se a
+     * conta estiver bloqueada, fica desbloqueada.
      *
      * @param username o utilizador
      * @param replacement a nova palavra-passe
@@ -453,7 +826,29 @@ public class ParkingDesk {
         if (!authService.resetPassword(currentUser, username, replacement)) {
             return false;
         }
-        userRepository.updateCredentials(authService.find(username));
+        User user = authService.find(username);
+        userRepository.updateCredentials(user);
+        userRepository.updateLockState(user);
+        record(LocalDateTime.now(), AuditEntry.Action.PASSWORD_RESET, user.getUsername());
+        return true;
+    }
+
+    /**
+     * Desbloqueia uma conta antes de acabarem os 15 minutos (RF03).
+     *
+     * @param username o utilizador
+     * @return {@code false} se o utilizador não existir
+     * @throws SecurityException se quem está autenticado não for
+     *         administrador
+     * @throws SQLException se a gravação falhar
+     */
+    public boolean unlockUser(String username) throws SQLException {
+        if (!authService.unlock(currentUser, username)) {
+            return false;
+        }
+        User user = authService.find(username);
+        userRepository.updateLockState(user);
+        record(LocalDateTime.now(), AuditEntry.Action.USER_UNLOCKED, user.getUsername());
         return true;
     }
 
@@ -476,6 +871,7 @@ public class ParkingDesk {
             return false;
         }
         userRepository.deactivate(user);
+        record(LocalDateTime.now(), AuditEntry.Action.USER_REMOVED, user.getUsername());
         return true;
     }
 
@@ -494,6 +890,61 @@ public class ParkingDesk {
         AuthService.requireAdmin(currentUser);
         tariffRepository.replaceActive(tariff, now);
         billingService.setTariff(tariff);
+        record(now, AuditEntry.Action.TARIFF_CHANGED, tariff.getHourlyRateCents(), tariff.getDailyCapCents(),
+                tariff.getNightRateCents(), tariff.getWeekendDiscountPercent(), tariff.getLostTicketCents(),
+                tariff.getMonthlyPassCents());
+    }
+
+    /**
+     * Grava uma cópia de segurança de todas as tabelas num ficheiro (RF24).
+     *
+     * @param file o ficheiro a criar ou substituir
+     * @param now a hora, para o registo de auditoria
+     * @return quantas linhas foram copiadas
+     * @throws SecurityException se quem está autenticado não for
+     *         administrador
+     * @throws IOException se a escrita do ficheiro falhar
+     * @throws SQLException se a leitura da base falhar
+     */
+    public int backup(Path file, LocalDateTime now) throws IOException, SQLException {
+        AuthService.requireAdmin(currentUser);
+        int rows = backupRepository.export(file);
+        record(now, AuditEntry.Action.BACKUP_CREATED, file.getFileName(), rows);
+        return rows;
+    }
+
+    /**
+     * Substitui o conteúdo da base pelo de uma cópia de segurança (RF24),
+     * numa só transacção: ou fica tudo da cópia, ou não muda nada.
+     *
+     * <p>Depois disto as estruturas em memória já não correspondem à base:
+     * fica ninguém autenticado, e a interface fecha o programa para ser
+     * aberto de novo.
+     *
+     * @param file o ficheiro da cópia
+     * @param now a hora, para o registo de auditoria
+     * @return quantas linhas foram repostas
+     * @throws SecurityException se quem está autenticado não for
+     *         administrador
+     * @throws IOException se o ficheiro não se puder ler ou não for uma cópia
+     *         deste programa
+     * @throws SQLException se a escrita na base falhar (a base fica como
+     *         estava); se só a linha de auditoria falhar, a cópia fica
+     *         reposta e o método termina normalmente
+     */
+    public int restore(Path file, LocalDateTime now) throws IOException, SQLException {
+        AuthService.requireAdmin(currentUser);
+        int rows = backupRepository.restore(file);
+        String admin = currentUser.getUsername();
+        currentUser = null;
+        clearOperations();
+        try {
+            recordAs(now, admin, AuditEntry.Action.BACKUP_RESTORED, file.getFileName(), rows);
+        } catch (SQLException e) {
+            // A cópia já está reposta. Sem esta linha o registo fica incompleto,
+            // mas dizer ao administrador que o restauro falhou seria pior.
+        }
+        return rows;
     }
 
     // ------------------------------------------------------------------
@@ -595,14 +1046,27 @@ public class ParkingDesk {
         return new BillingService(tariff).amountFor(minutes);
     }
 
+    /**
+     * Quanto pagaria uma estadia que começa a uma hora certa, com uma tarifa
+     * que ainda não está em vigor: conta a noite e o fim-de-semana.
+     *
+     * @param tariff a tarifa a experimentar
+     * @param entry a hora de entrada
+     * @param minutes a duração da estadia, em minutos
+     * @return o valor, em centavos
+     */
+    public long priceWith(Tariff tariff, LocalDateTime entry, long minutes) {
+        return new BillingService(tariff).amountBetween(entry, entry.plusMinutes(minutes));
+    }
+
     // ------------------------------------------------------------------
     // Relatórios
     // ------------------------------------------------------------------
 
     /**
      * A receita de um período, de todos os operadores (RF18): os pagamentos
-     * em três ordens e os totais por dia, por operador e por método. Só para
-     * o administrador.
+     * em três ordens, as avenças vendidas, e os totais por dia, por operador
+     * e por método. Só para o administrador.
      *
      * @param from o início do período, incluído
      * @param to o fim do período, excluído
@@ -614,13 +1078,13 @@ public class ParkingDesk {
      */
     public RevenueReport revenue(LocalDateTime from, LocalDateTime to) {
         AuthService.requireAdmin(currentUser);
-        return ReportService.revenue(paymentHistory.payments(), from, to, null);
+        return ReportService.revenue(paymentHistory.payments(), passService.passes(), from, to, null);
     }
 
     /**
-     * O fecho de caixa de quem está autenticado (RF21): só os pagamentos
-     * que ele próprio cobrou entre {@code from} e {@code to}. Qualquer
-     * utilizador pode pedir o seu.
+     * O fecho de caixa de quem está autenticado (RF21): só os pagamentos e
+     * as avenças que ele próprio cobrou entre {@code from} e {@code to}.
+     * Qualquer utilizador pode pedir o seu.
      *
      * @param from o início do turno; a interface passa a hora do login
      * @param to o fim do turno; a interface passa a hora actual
@@ -630,7 +1094,49 @@ public class ParkingDesk {
      */
     public CashClose cashClose(LocalDateTime from, LocalDateTime to) {
         requireLoggedIn();
-        return ReportService.cashClose(paymentHistory.payments(), currentUser, from, to);
+        return ReportService.cashClose(paymentHistory.payments(), passService.passes(), currentUser, from, to);
+    }
+
+    /**
+     * O histórico das estadias com filtros (RF20), para o ecrã do histórico
+     * e para exportar em CSV. Só para o administrador.
+     *
+     * @param from o início do período de entrada, incluído
+     * @param to o fim do período de entrada, excluído
+     * @param plateText um pedaço da matrícula, ou vazio para todas
+     * @param operator só as saídas cobradas por este operador, ou
+     *        {@code null} para todos
+     * @param includeInPark se entram os carros ainda no parque
+     * @param includeLeft se entram as estadias que já saíram
+     * @return as linhas, pela hora de entrada
+     * @throws SecurityException se quem está autenticado não for
+     *         administrador
+     * @see ReportService#history
+     */
+    public Iterable<HistoryEntry> history(LocalDateTime from, LocalDateTime to, String plateText,
+            String operator, boolean includeInPark, boolean includeLeft) {
+        AuthService.requireAdmin(currentUser);
+        return ReportService.history(paymentHistory.payments(), lanes, from, to, plateText, operator,
+                includeInPark, includeLeft);
+    }
+
+    /**
+     * As linhas do registo de auditoria (RF23), com filtros. Só para o
+     * administrador.
+     *
+     * @param from o início, incluído
+     * @param to o fim, excluído
+     * @param username só deste utilizador, ou {@code null} para todos
+     * @param action só desta operação, ou {@code null} para todas
+     * @return as linhas, da mais antiga para a mais recente
+     * @throws SecurityException se quem está autenticado não for
+     *         administrador
+     * @complexity O(N), uma passagem pelo registo
+     */
+    public Iterable<AuditEntry> auditLog(LocalDateTime from, LocalDateTime to, String username,
+            AuditEntry.Action action) {
+        AuthService.requireAdmin(currentUser);
+        return auditService.filter(from, to, username, action);
     }
 
     /**
@@ -673,6 +1179,43 @@ public class ParkingDesk {
     // ------------------------------------------------------------------
     // Auxiliares
     // ------------------------------------------------------------------
+
+    /**
+     * Desfaz uma entrada: o carro tem de estar no topo da sua baia, o que é
+     * sempre verdade quando as operações se desfazem pela ordem da pilha.
+     */
+    private void undoEntry(ParkingSession session, LocalDateTime now) throws SQLException {
+        Lane lane = laneOf(session.getLaneCode());
+        if (lane.isEmpty() || lane.asStack().peek() != session || !session.isActive()) {
+            throw new IllegalStateException("o carro já não está no topo da baia: " + session);
+        }
+        lane.asStack().pop();
+        session.voidEntry();
+        sessionRepository.recordVoidedEntry(session, lane);
+        remember(new Move(1, session.getVehicle().getPlate(), lane.getCode(), null));
+        record(now, AuditEntry.Action.ENTRY_UNDONE, session.getVehicle().getPlate(), session.getTicketNumber());
+        admitWaiting(now);
+    }
+
+    /** Esvazia a pilha de operações. O(m), m = operações empilhadas. */
+    private void clearOperations() {
+        while (!operations.isEmpty()) {
+            operations.pop();
+        }
+    }
+
+    /** Regista uma operação de quem está autenticado. */
+    private void record(LocalDateTime at, AuditEntry.Action action, Object... values) throws SQLException {
+        recordAs(at, currentUser == null ? null : currentUser.getUsername(), action, values);
+    }
+
+    /** Grava uma linha de auditoria e junta-a ao registo em memória. */
+    private void recordAs(LocalDateTime at, String username, AuditEntry.Action action, Object... values)
+            throws SQLException {
+        AuditEntry entry = new AuditEntry(at, username, action, AuditEntry.join(values));
+        auditRepository.insert(entry);
+        auditService.add(entry);
+    }
 
     /** Grava uma entrada e junta-a aos movimentos recentes. */
     private void recordEntry(ParkingSession session, Reservation checkedIn) throws SQLException {

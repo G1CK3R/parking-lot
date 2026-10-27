@@ -8,6 +8,8 @@ import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.time.LocalDateTime;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -40,6 +42,58 @@ class AuthServiceTest {
         assertNull(auth.login("admin", pw("wrong-pass")));
         assertNull(auth.login("nobody", pw("admin-pass")));
         assertNull(auth.login("ADMIN", pw("admin-pass")));
+    }
+
+    // ---- bloqueio por tentativas (RF03) ------------------------------------
+
+    private static final LocalDateTime T0 = LocalDateTime.of(2026, 10, 20, 8, 0);
+
+    @Test
+    void fiveWrongPasswordsInARowLockTheAccount() {
+        for (int i = 1; i < AuthService.MAX_FAILED_ATTEMPTS; i++) {
+            assertNull(auth.login("admin", pw("wrong-pass"), T0));
+            assertEquals(i, admin.getFailedAttempts());
+            assertFalse(admin.isLockedAt(T0));
+        }
+        assertNull(auth.login("admin", pw("wrong-pass"), T0));
+        assertTrue(admin.isLockedAt(T0));
+        assertEquals(T0.plusMinutes(AuthService.LOCK_MINUTES), admin.getLockedUntil());
+
+        // Bloqueada, nem a palavra-passe certa entra.
+        assertNull(auth.login("admin", pw("admin-pass"), T0.plusMinutes(14)));
+        // Passados os 15 minutos, entra, e as tentativas voltam a zero.
+        assertSame(admin, auth.login("admin", pw("admin-pass"), T0.plusMinutes(15)));
+        assertEquals(0, admin.getFailedAttempts());
+        assertNull(admin.getLockedUntil());
+    }
+
+    @Test
+    void theRightPasswordResetsTheCount() {
+        auth.login("admin", pw("wrong-pass"), T0);
+        auth.login("admin", pw("wrong-pass"), T0);
+        assertSame(admin, auth.login("admin", pw("admin-pass"), T0));
+        assertEquals(0, admin.getFailedAttempts());
+    }
+
+    @Test
+    void anAdminCanUnlockAndAResetAlsoUnlocks() {
+        User ana = auth.register(admin, "ana", pw("operadora-1"), User.Role.OPERATOR);
+        for (int i = 0; i < AuthService.MAX_FAILED_ATTEMPTS; i++) {
+            auth.login("ana", pw("wrong-pass"), T0);
+        }
+        assertTrue(ana.isLockedAt(T0));
+
+        assertThrows(SecurityException.class, () -> auth.unlock(ana, "ana"));
+        assertTrue(auth.unlock(admin, "ana"));
+        assertFalse(ana.isLockedAt(T0));
+        assertFalse(auth.unlock(admin, "nobody"));
+
+        for (int i = 0; i < AuthService.MAX_FAILED_ATTEMPTS; i++) {
+            auth.login("ana", pw("wrong-pass"), T0);
+        }
+        assertTrue(ana.isLockedAt(T0));
+        assertTrue(auth.resetPassword(admin, "ana", pw("operadora-2")));
+        assertSame(ana, auth.login("ana", pw("operadora-2"), T0));
     }
 
     @Test

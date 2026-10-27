@@ -134,6 +134,104 @@ class BillingServiceTest {
         assertThrows(NullPointerException.class, () -> billing.setTariff(null));
     }
 
+    // ---- noite, fim-de-semana, multa e avença (RF16, RF17) ----------------
+
+    /**
+     * Tolerância 15 min, fracção 15 min, 60 MZN por hora de dia e 30 de
+     * noite, tecto 400 MZN, 20 % de desconto ao fim-de-semana, multa de 500
+     * MZN e avença de 3500 MZN. O dia 20/10/2026 é uma terça e o 24 um sábado.
+     */
+    private static final Tariff PERIODS = new Tariff(15, 15, 6000, 40000, 3000, 20, 50000, 350000);
+
+    @Test
+    void theNightPaysTheNightRate() {
+        BillingService night = new BillingService(PERIODS);
+        LocalDateTime tuesday21h = LocalDateTime.of(2026, 10, 20, 21, 0);
+
+        assertEquals(6000, night.amountBetween(tuesday21h, tuesday21h.plusHours(2)));
+    }
+
+    @Test
+    void eachFractionPaysTheRateOfTheHourItStarts() {
+        BillingService night = new BillingService(PERIODS);
+        LocalDateTime tuesday19h = LocalDateTime.of(2026, 10, 20, 19, 0);
+
+        // 1 h de dia (60 MZN) e 1 h de noite (30 MZN).
+        assertEquals(9000, night.amountBetween(tuesday19h, tuesday19h.plusHours(2)));
+        // Às 7h00 já é dia.
+        LocalDateTime tuesday6h = LocalDateTime.of(2026, 10, 20, 6, 0);
+        assertEquals(3000 + 6000, night.amountBetween(tuesday6h, tuesday6h.plusHours(2)));
+    }
+
+    @Test
+    void theWeekendHasTheDiscount() {
+        BillingService weekend = new BillingService(PERIODS);
+        LocalDateTime saturday10h = LocalDateTime.of(2026, 10, 24, 10, 0);
+
+        // 3 h a 60 MZN com 20 % de desconto: 144 MZN em vez de 180.
+        assertEquals(14400, weekend.amountBetween(saturday10h, saturday10h.plusHours(3)));
+    }
+
+    @Test
+    void fullDaysStillPayTheCapAndTheRestStartsADayLater() {
+        BillingService periods = new BillingService(PERIODS);
+        LocalDateTime tuesday10h = LocalDateTime.of(2026, 10, 20, 10, 0);
+
+        assertEquals(40000 + 12000, periods.amountBetween(tuesday10h, tuesday10h.plusHours(26)));
+        assertEquals(40000, periods.amountBetween(tuesday10h, tuesday10h.plusHours(10)));
+        // Sem saber a hora, conta tudo ao valor de dia.
+        assertEquals(12000, periods.amountFor(120));
+    }
+
+    @Test
+    void withoutPeriodsTheResultIsTheSameAsBefore() {
+        LocalDateTime saturday21h = LocalDateTime.of(2026, 10, 24, 21, 0);
+        for (int minutes = 0; minutes <= 3000; minutes += 7) {
+            assertEquals(billing.amountFor(minutes),
+                    billing.amountBetween(saturday21h, saturday21h.plusMinutes(minutes)));
+        }
+    }
+
+    @Test
+    void aLostTicketAddsTheFineAndAPassCoversTheStay() {
+        BillingService periods = new BillingService(PERIODS);
+        ParkingSession session = session();
+        LocalDateTime at = ENTRY.plusHours(2);
+
+        assertEquals(12000, periods.quote(session, at, false, false));
+        assertEquals(12000 + 50000, periods.quote(session, at, true, false));
+        assertEquals(0, periods.quote(session, at, false, true));
+        assertEquals(50000, periods.quote(session, at, true, true));
+    }
+
+    @Test
+    void aPaymentCoveredByThePassIsRecordedAsPass() {
+        BillingService periods = new BillingService(PERIODS);
+        User operator = new User("op1", "hash", "salt", 1, User.Role.OPERATOR);
+        LocalDateTime at = ENTRY.plusHours(2);
+
+        Payment covered = periods.pay(session(), Payment.Method.CASH, at, operator, false, true);
+        assertEquals(0, covered.getAmountCents());
+        assertEquals(Payment.Method.PASS, covered.getMethod());
+
+        Payment lost = periods.pay(session(), Payment.Method.MPESA, at, operator, true, true);
+        assertEquals(50000, lost.getAmountCents());
+        assertEquals(50000, lost.getLostTicketCents());
+        assertEquals(Payment.Method.MPESA, lost.getMethod());
+
+        Payment both = periods.pay(session(), Payment.Method.CARD, at, operator, true, false);
+        assertEquals(12000 + 50000, both.getAmountCents());
+        assertEquals(50000, both.getLostTicketCents());
+    }
+
+    @Test
+    void tariffRejectsValuesOutOfRange() {
+        assertThrows(IllegalArgumentException.class, () -> new Tariff(15, 15, 6000, 40000, -1, 0, 0, 0));
+        assertThrows(IllegalArgumentException.class, () -> new Tariff(15, 15, 6000, 40000, 3000, 101, 0, 0));
+        assertThrows(IllegalArgumentException.class, () -> new Tariff(15, 15, 6000, 40000, 3000, 0, -1, 0));
+        assertThrows(IllegalArgumentException.class, () -> new Tariff(15, 15, 6000, 40000, 3000, 0, 0, -1));
+    }
+
     // ---- auxiliares -----------------------------------------------------
 
     private static ParkingSession session() {

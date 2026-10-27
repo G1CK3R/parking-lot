@@ -15,14 +15,21 @@ import java.util.Objects;
  * <p>O valor fica em centavos de metical, num {@code long}, como na
  * {@link Tariff}, e já calculado: mudar de tarifa não muda pagamentos feitos.
  *
+ * <p>Se o carro saiu sem talão, o valor inclui a multa por talão perdido
+ * (RF17), que também fica guardada à parte em {@link #getLostTicketCents()}.
+ * Se a estadia foi coberta por uma avença mensal (RF16), o método é
+ * {@link Method#PASS} e o valor é 0 (ou só a multa, se houver).
+ *
  * <p>Imutável, excepto o identificador da base de dados.
  */
-public class Payment {
+public class Payment implements Charge {
     public enum Method {
         CASH,
         MPESA,
         EMOLA,
-        CARD
+        CARD,
+        /** A estadia foi coberta por uma avença mensal: não se pagou nada por ela. */
+        PASS
     }
 
     private final ParkingSession session;
@@ -31,6 +38,7 @@ public class Payment {
     private final Method method;
     private final LocalDateTime paidAt;
     private final User operator;
+    private final long lostTicketCents;
 
     private long id;
 
@@ -47,6 +55,25 @@ public class Payment {
      */
     public Payment(ParkingSession session, Tariff tariff, long amountCents, Method method,
             LocalDateTime paidAt, User operator) {
+        this(session, tariff, amountCents, method, paidAt, operator, 0);
+    }
+
+    /**
+     * Um pagamento que pode incluir a multa por talão perdido.
+     *
+     * @param session a sessão paga
+     * @param tariff a tarifa com que {@code amountCents} foi calculado
+     * @param amountCents o valor pago, em centavos, já com a multa
+     * @param method o método de pagamento
+     * @param paidAt a hora do pagamento
+     * @param operator o operador que cobrou
+     * @param lostTicketCents a parte do valor que é multa por talão perdido, 0
+     *        se o talão apareceu
+     * @throws IllegalArgumentException se a multa for negativa ou maior que o
+     *         valor, ou nos casos do outro construtor
+     */
+    public Payment(ParkingSession session, Tariff tariff, long amountCents, Method method,
+            LocalDateTime paidAt, User operator, long lostTicketCents) {
         Objects.requireNonNull(session, "session não pode ser null");
         Objects.requireNonNull(tariff, "tariff não pode ser null");
         Objects.requireNonNull(method, "method não pode ser null");
@@ -58,12 +85,16 @@ public class Payment {
         if (paidAt.isBefore(session.getEntryTime())) {
             throw new IllegalArgumentException("paidAt está antes da entrada entry: " + paidAt);
         }
+        if (lostTicketCents < 0 || lostTicketCents > amountCents) {
+            throw new IllegalArgumentException("lostTicketCents fora de 0.." + amountCents + ": " + lostTicketCents);
+        }
         this.session = session;
         this.tariff = tariff;
         this.amountCents = amountCents;
         this.method = method;
         this.paidAt = paidAt;
         this.operator = operator;
+        this.lostTicketCents = lostTicketCents;
     }
 
     public ParkingSession getSession() {
@@ -78,20 +109,35 @@ public class Payment {
         return tariff;
     }
 
+    @Override
     public long getAmountCents() {
         return amountCents;
     }
 
+    @Override
     public Method getMethod() {
         return method;
     }
 
+    @Override
     public LocalDateTime getPaidAt() {
         return paidAt;
     }
 
+    @Override
     public User getOperator() {
         return operator;
+    }
+
+    /** @return a matrícula do carro da sessão paga */
+    @Override
+    public String getPlate() {
+        return session.getVehicle().getPlate();
+    }
+
+    /** @return a parte do valor que é multa por talão perdido, 0 se não houve multa */
+    public long getLostTicketCents() {
+        return lostTicketCents;
     }
 
     /**

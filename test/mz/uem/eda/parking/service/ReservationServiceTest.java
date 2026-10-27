@@ -1,6 +1,7 @@
 package mz.uem.eda.parking.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -173,11 +174,58 @@ class ReservationServiceTest {
         assertNull(reservations.cancel("AAA002MC", T0.plusMinutes(11)));
         assertNull(reservations.checkIn(car("AAA002MC"), T0.plusMinutes(12)));
 
-        // A primeira expira; a cancelada, que estava atrás, sai logo a seguir.
+        // A primeira expira. A cancelada fica na fila até à sua hora de
+        // expiração, para o cancelamento ainda se poder desfazer; depois sai.
         reservations.expire(T0.plusMinutes(TOLERANCE));
         assertEquals(Reservation.Status.EXPIRED, first.getStatus());
-        assertEquals(0, count(reservations.reservations()));
+        assertEquals(1, count(reservations.reservations()));
         assertEquals(0, reservations.activeCount());
+        reservations.expire(T0.plusMinutes(5 + TOLERANCE));
+        assertEquals(Reservation.Status.CANCELLED, second.getStatus());
+        assertEquals(0, count(reservations.reservations()));
+    }
+
+    // ---- desfazer o cancelamento ----------------------------------------
+
+    @Test
+    void reactivateUndoesACancellationUntilTheSameExpiry() {
+        Reservation r = reservations.reserve("AAA001MC", 60, T0);
+        reservations.cancel("AAA001MC", T0.plusMinutes(5));
+        assertEquals(3, reservations.availableForWalkIns(T0.plusMinutes(5)));
+
+        assertTrue(reservations.reactivate(r, T0.plusMinutes(6)));
+        assertEquals(Reservation.Status.ACTIVE, r.getStatus());
+        assertEquals(T0.plusMinutes(TOLERANCE), r.getExpiresAt());
+        assertEquals(1, reservations.activeCount());
+        assertEquals(2, reservations.availableForWalkIns(T0.plusMinutes(6)));
+        assertEquals(r, reservations.find("AAA001MC"));
+    }
+
+    @Test
+    void reactivateFailsWhenItIsTooLateOrThePlaceIsGone() {
+        Reservation late = reservations.reserve("AAA001MC", 60, T0);
+        reservations.cancel("AAA001MC", T0.plusMinutes(5));
+        assertFalse(reservations.reactivate(late, T0.plusMinutes(TOLERANCE)));
+
+        // Já há outra reserva da mesma matrícula.
+        Reservation replaced = reservations.reserve("BBB001MC", 60, T0.plusMinutes(40));
+        reservations.cancel("BBB001MC", T0.plusMinutes(41));
+        reservations.reserve("BBB001MC", 60, T0.plusMinutes(42));
+        assertFalse(reservations.reactivate(replaced, T0.plusMinutes(43)));
+
+        // O carro entretanto entrou sem reserva.
+        Reservation parked = reservations.reserve("CCC001MC", 60, T0.plusMinutes(44));
+        reservations.cancel("CCC001MC", T0.plusMinutes(45));
+        entry.enter(car("CCC001MC"), 60, T0.plusMinutes(46));
+        assertFalse(reservations.reactivate(parked, T0.plusMinutes(47)));
+
+        // O parque encheu: já não há lugar para guardar.
+        Reservation full = reservations.reserve("DDD001MC", 60, T0.plusMinutes(48));
+        reservations.cancel("DDD001MC", T0.plusMinutes(49));
+        entry.enter(car("PPP001MC"), 60, T0.plusMinutes(50));
+        assertEquals(0, reservations.availableForWalkIns(T0.plusMinutes(50)));
+        assertFalse(reservations.reactivate(full, T0.plusMinutes(51)));
+        assertEquals(Reservation.Status.CANCELLED, full.getStatus());
     }
 
     @Test

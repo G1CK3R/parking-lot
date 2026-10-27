@@ -28,6 +28,7 @@ import javax.swing.JScrollPane;
 import javax.swing.JTabbedPane;
 import javax.swing.table.DefaultTableModel;
 
+import mz.uem.eda.parking.model.MonthlyPass;
 import mz.uem.eda.parking.model.ParkingSession;
 import mz.uem.eda.parking.model.Payment;
 import mz.uem.eda.parking.service.ParkingDesk;
@@ -38,9 +39,11 @@ import mz.uem.eda.parking.ui.theme.Theme;
 
 /**
  * O ecrã de relatórios, só para o administrador (RF18): a receita de um
- * período, com o total, o número de pagamentos e a média, e quatro
- * separadores: por dia, por operador, por método de pagamento e a lista dos
- * pagamentos. A lista pode exportar-se para CSV (RF20), para abrir no Excel.
+ * período, com o total, o número de cobranças (pagamentos de estadias e
+ * avenças vendidas) e a média, e cinco separadores: por dia, por operador,
+ * por método de pagamento, a lista dos pagamentos e a lista das avenças. A
+ * lista dos pagamentos pode exportar-se para CSV (RF20), para abrir no
+ * Excel.
  *
  * <p>O ecrã só escolhe o período e mostra. As contas e as ordenações são da
  * {@code ParkingDesk} ({@link ParkingDesk#revenue}), com o radix sort de
@@ -49,19 +52,9 @@ import mz.uem.eda.parking.ui.theme.Theme;
  */
 public final class ReportsDialog {
 
-    /** Os períodos que se podem escolher, pela ordem da lista. */
-    private static final String[] PERIODS = { "today", "yesterday", "last7", "last30", "thisMonth",
-        "lastMonth", "all" };
-
-    /** O período escolhido ao abrir: os últimos 7 dias. */
-    private static final int DEFAULT_PERIOD = 2;
-
-    /** "Tudo" começa aqui; o histórico não tem pagamentos mais antigos. */
-    private static final LocalDate BEGINNING = LocalDate.of(2000, 1, 1);
-
     private final JDialog dialog;
     private final ParkingDesk desk;
-    private final JComboBox<String> period = new JComboBox<>();
+    private final JComboBox<String> period = ReportParts.periodChoice();
     private final JLabel range = new JLabel();
     private final JLabel total = new JLabel();
     private final JLabel count = new JLabel();
@@ -77,16 +70,16 @@ public final class ReportsDialog {
             "report.column.plate", "report.column.lane", "report.column.stay", "report.column.amount",
             "report.column.method", "report.column.operator");
     private final JLabel paymentsNote = ReportParts.note();
+    private final DefaultTableModel passes = ReportParts.model("report.column.paidAt", "report.column.plate",
+            "report.column.customer", "report.column.month", "report.column.amount", "report.column.method",
+            "report.column.operator");
+    private final JLabel passesNote = ReportParts.note();
     private RevenueReport report;
 
     private ReportsDialog(Window owner, ParkingDesk desk) {
         this.desk = desk;
         this.dialog = new JDialog(owner, Texts.get("report.title"), Dialog.ModalityType.APPLICATION_MODAL);
 
-        for (String key : PERIODS) {
-            period.addItem(Texts.get("report.period." + key));
-        }
-        period.setSelectedIndex(DEFAULT_PERIOD);
         period.addActionListener(new ActionListener() {
             @Override
             public void actionPerformed(ActionEvent e) {
@@ -156,6 +149,13 @@ public final class ReportsDialog {
         paymentsTab.add(paymentsTable, BorderLayout.CENTER);
         paymentsTab.add(paymentsNote, BorderLayout.SOUTH);
         tabs.addTab(Texts.get("report.tab.payments"), paymentsTab);
+        JPanel passesTab = new JPanel(new BorderLayout(0, Theme.GAP));
+        passesTab.setBorder(Theme.padding());
+        JScrollPane passesTable = ReportParts.table(passes, 4);
+        ReportParts.widths(passesTable, 140, 100, 180, 140, 110, 90, 90);
+        passesTab.add(passesTable, BorderLayout.CENTER);
+        passesTab.add(passesNote, BorderLayout.SOUTH);
+        tabs.addTab(Texts.get("report.tab.passes"), passesTab);
 
         JPanel bottom = new JPanel(new FlowLayout(FlowLayout.RIGHT, 0, 0));
         bottom.add(close);
@@ -186,49 +186,16 @@ public final class ReportsDialog {
 
     /** Pede à {@code ParkingDesk} o relatório do período escolhido e mostra-o. */
     private void load() {
-        LocalDate today = LocalDate.now();
-        LocalDate first;
-        LocalDate end = today.plusDays(1);
-        switch (PERIODS[period.getSelectedIndex()]) {
-            case "today":
-                first = today;
-                break;
-            case "yesterday":
-                first = today.minusDays(1);
-                end = today;
-                break;
-            case "last7":
-                first = today.minusDays(6);
-                break;
-            case "last30":
-                first = today.minusDays(29);
-                break;
-            case "thisMonth":
-                first = today.withDayOfMonth(1);
-                break;
-            case "lastMonth":
-                first = today.withDayOfMonth(1).minusMonths(1);
-                end = today.withDayOfMonth(1);
-                break;
-            default:
-                first = BEGINNING;
-                break;
-        }
-        report = desk.revenue(first.atStartOfDay(), end.atStartOfDay());
-
-        if (first.equals(BEGINNING)) {
-            range.setText(Texts.format("report.range.all", end.minusDays(1).format(ReportParts.DATE)));
-        } else {
-            range.setText(Texts.format("report.range", first.format(ReportParts.DATE),
-                    end.minusDays(1).format(ReportParts.DATE)));
-        }
+        LocalDate[] days = ReportParts.period(period.getSelectedIndex(), LocalDate.now());
+        report = desk.revenue(days[0].atStartOfDay(), days[1].atStartOfDay());
+        range.setText(ReportParts.rangeText(days[0], days[1]));
         total.setText(Texts.money(report.getTotalCents()));
         count.setText(String.valueOf(report.getCount()));
         average.setText(Texts.money(report.getAverageCents()));
 
-        days.setRowCount(0);
+        this.days.setRowCount(0);
         for (RevenueLine<LocalDate> line : report.byDay()) {
-            days.addRow(row(line.getKey().format(ReportParts.DATE), line));
+            this.days.addRow(row(line.getKey().format(ReportParts.DATE), line));
         }
         operators.setRowCount(0);
         for (RevenueLine<String> line : report.byOperator()) {
@@ -239,6 +206,15 @@ public final class ReportsDialog {
             methods.addRow(row(Texts.get("payment." + line.getKey().name()), line));
         }
         showPayments();
+
+        passes.setRowCount(0);
+        for (MonthlyPass pass : report.passes()) {
+            passes.addRow(new Object[] { pass.getPaidAt().format(ReportParts.DATE_TIME), pass.getPlate(),
+                pass.getCustomerName(), Texts.month(pass.getMonth()), Texts.money(pass.getAmountCents()),
+                Texts.get("payment." + pass.getMethod().name()), pass.getOperator().getUsername() });
+        }
+        passesNote.setText(Texts.format("report.note.passes", String.valueOf(report.getPassCount()),
+                Texts.money(report.getPassTotalCents())));
     }
 
     private Object[] row(String label, RevenueLine<?> line) {
@@ -258,7 +234,8 @@ public final class ReportsDialog {
                 Texts.get("payment." + payment.getMethod().name()), payment.getOperator().getUsername() });
         }
         String[] notes = { "report.note.time", "report.note.amount", "report.note.ticket" };
-        paymentsNote.setText(Texts.format(notes[order.getSelectedIndex()], String.valueOf(report.getCount())));
+        paymentsNote.setText(Texts.format(notes[order.getSelectedIndex()],
+                String.valueOf(report.getPaymentCount())));
     }
 
     private Iterable<Payment> chosenOrder() {
@@ -294,14 +271,15 @@ public final class ReportsDialog {
      * acentos aparecerem certos.
      */
     private void exportCsv() {
-        if (report.getCount() == 0) {
+        if (report.getPaymentCount() == 0) {
             JOptionPane.showMessageDialog(dialog, Texts.get("report.export.empty"),
                     Texts.get("report.export"), JOptionPane.INFORMATION_MESSAGE);
             return;
         }
         JFileChooser chooser = new JFileChooser();
         String last = report.getTo().toLocalDate().minusDays(1).toString();
-        String name = report.getFrom().toLocalDate().equals(BEGINNING) ? Texts.format("report.export.file.all", last)
+        String name = report.getFrom().toLocalDate().equals(ReportParts.BEGINNING)
+                ? Texts.format("report.export.file.all", last)
                 : Texts.format("report.export.file", report.getFrom().toLocalDate().toString(), last);
         chooser.setSelectedFile(new File(name));
         if (chooser.showSaveDialog(dialog) != JFileChooser.APPROVE_OPTION) {
@@ -322,7 +300,8 @@ public final class ReportsDialog {
             return;
         }
         JOptionPane.showMessageDialog(dialog,
-                Texts.format("report.export.done", String.valueOf(report.getCount()), file.getAbsolutePath()),
+                Texts.format("report.export.done", String.valueOf(report.getPaymentCount()),
+                        file.getAbsolutePath()),
                 Texts.get("report.export"), JOptionPane.INFORMATION_MESSAGE);
     }
 

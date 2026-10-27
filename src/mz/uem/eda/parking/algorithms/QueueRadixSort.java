@@ -41,8 +41,9 @@ public final class QueueRadixSort {
             max = Math.max(max, k);
         }
 
-        @SuppressWarnings("unchecked") // o Java não cria vectores genéricos
-
+        // O Java não cria vectores de um tipo genérico: cria-se um vector de
+        // Queue sem tipo e avisa-se o compilador de que é intencional.
+        @SuppressWarnings({ "unchecked", "rawtypes" })
         Queue<T>[] buckets = new Queue[10];
         for(int d = 0; d < 10; d++) {
             buckets[d] = new LinkedQueue<>();

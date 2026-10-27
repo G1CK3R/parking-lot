@@ -17,6 +17,7 @@ import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.table.DefaultTableModel;
 
+import mz.uem.eda.parking.model.Charge;
 import mz.uem.eda.parking.model.Payment;
 import mz.uem.eda.parking.service.CashClose;
 import mz.uem.eda.parking.service.ParkingDesk;
@@ -29,12 +30,14 @@ import mz.uem.eda.parking.ui.theme.Theme;
  * O fecho de caixa do turno (RF21), para qualquer utilizador: o que ele
  * próprio cobrou desde que entrou no programa.
  *
- * <p>Em cima, o total e o número de pagamentos. À esquerda, o total por
- * método de pagamento, com os quatro métodos sempre presentes (também os
- * que ficaram a zero), porque é com esta tabela que se confere a gaveta, o
- * M-Pesa, o e-Mola e o terminal do cartão. À direita, os pagamentos do
- * turno do maior para o menor, ordenados pela {@code ParkingDesk} com duas
- * pilhas; a nota por baixo diz quantas comparações isso custou.
+ * <p>Em cima, o total e o número de cobranças: pagamentos de estadias e
+ * avenças vendidas. À esquerda, o total por método de pagamento, com todos
+ * os métodos sempre presentes (também os que ficaram a zero), porque é com
+ * esta tabela que se confere a gaveta, o M-Pesa, o e-Mola e o terminal do
+ * cartão; a linha da avença conta as saídas cobertas por avença, que não
+ * pagaram nada. À direita, os valores do turno do maior para o menor,
+ * ordenados pela {@code ParkingDesk} com duas pilhas; a nota por baixo diz
+ * quantas comparações isso custou.
  */
 public final class CashCloseDialog {
 
@@ -144,11 +147,14 @@ public final class CashCloseDialog {
         }
 
         payments.setRowCount(0);
-        for (Payment payment : cash.paymentsByAmount()) {
-            payments.addRow(new Object[] { Texts.money(payment.getAmountCents()),
-                String.valueOf(payment.getSession().getTicketNumber()),
-                payment.getSession().getVehicle().getPlate(), payment.getPaidAt().format(ReportParts.TIME),
-                Texts.get("payment." + payment.getMethod().name()) });
+        for (Charge charge : cash.chargesByAmount()) {
+            // Um pagamento tem talão; uma avença não, e a coluna diz que é uma avença.
+            String ticket = charge instanceof Payment
+                    ? String.valueOf(((Payment) charge).getSession().getTicketNumber())
+                    : Texts.get("cash.pass");
+            payments.addRow(new Object[] { Texts.money(charge.getAmountCents()), ticket, charge.getPlate(),
+                charge.getPaidAt().format(ReportParts.TIME),
+                Texts.get("payment." + charge.getMethod().name()) });
         }
         note.setText(report.getCount() == 0 ? Texts.get("cash.note.empty")
                 : Texts.format("cash.note", String.valueOf(report.getCount()),

@@ -9,6 +9,7 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 
 import javax.swing.JButton;
+import javax.swing.JCheckBox;
 import javax.swing.JComboBox;
 import javax.swing.JDialog;
 import javax.swing.JLabel;
@@ -30,6 +31,10 @@ import mz.uem.eda.parking.ui.theme.Theme;
  * carro tem reserva, se há lugar e em que baia fica, ou se vai para a fila
  * de espera.
  *
+ * <p>A caixa «Cliente preferencial» é para o operador marcar idosos,
+ * grávidas e pessoas com deficiência: só conta se o parque estiver cheio,
+ * e aí o carro espera na fila preferencial em vez da normal.
+ *
  * <p>Se o parque estiver cheio, avisa logo que o carro ficou à espera. Se o
  * carro entrou, devolve a sessão: a janela principal anima a entrada e só
  * depois mostra o talão, com {@link #showTicket}.
@@ -44,6 +49,7 @@ public class EntryDialog {
     private final JComboBox<String> type = new JComboBox<>();
     private final JSpinner hours = new JSpinner(new SpinnerNumberModel(1, 0, 720, 1));
     private final JSpinner minutes = new JSpinner(new SpinnerNumberModel(0, 0, 59, 5));
+    private final JCheckBox preferential = new JCheckBox(Texts.get("entry.preferential"));
     private final JLabel message = new JLabel();
     private ParkingSession entered;
 
@@ -86,6 +92,7 @@ public class EntryDialog {
         form.addField(Texts.get("entry.plate"), plate);
         form.addField(Texts.get("entry.type"), type);
         form.addField(Texts.get("entry.duration"), duration);
+        form.addComponent(preferential);
         form.addMessage(message);
         form.addButtons(cancel, submit);
 
@@ -143,7 +150,7 @@ public class EntryDialog {
         LocalDateTime now = LocalDateTime.now();
         ParkingSession session;
         try {
-            session = desk.enter(text, chosen, estimated, now);
+            session = desk.enter(text, chosen, estimated, preferential.isSelected(), now);
         } catch (IllegalStateException | IllegalArgumentException e) {
             // Por exemplo, o carro já está no parque ou à espera, ou a
             // matrícula só tem espaços e hífenes. A frase pode ser comprida,
@@ -161,7 +168,9 @@ public class EntryDialog {
         dialog.dispose();
         if (session == null) {
             JOptionPane.showMessageDialog(dialog.getOwner(),
-                    Texts.format("entry.queued", Vehicle.normalizePlate(text)),
+                    Texts.format("entry.queued", Vehicle.normalizePlate(text),
+                            Texts.get(preferential.isSelected() ? "entry.queue.preferential"
+                                    : "entry.queue.normal")),
                     Texts.get("entry.queued.title"), JOptionPane.WARNING_MESSAGE);
         }
         entered = session;

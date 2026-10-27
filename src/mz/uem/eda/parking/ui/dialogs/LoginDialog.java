@@ -4,6 +4,9 @@ import java.awt.Cursor;
 import java.awt.Frame;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
+import java.sql.SQLException;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.Arrays;
 
 import javax.swing.JButton;
@@ -13,6 +16,7 @@ import javax.swing.JPasswordField;
 import javax.swing.JTextField;
 
 import mz.uem.eda.parking.model.User;
+import mz.uem.eda.parking.service.AuthService;
 import mz.uem.eda.parking.service.ParkingDesk;
 import mz.uem.eda.parking.ui.Texts;
 
@@ -24,10 +28,17 @@ import mz.uem.eda.parking.ui.Texts;
  * estão errados, sem dizer qual: dizer que o utilizador não existe ajudava
  * quem anda a adivinhar nomes.
  *
+ * <p>Cinco palavras-passe erradas seguidas bloqueiam a conta durante 15
+ * minutos (RF03). Aí o ecrã diz até quando, para o operador não continuar a
+ * tentar; o administrador pode desbloqueá-la antes, no ecrã de
+ * utilizadores.
+ *
  * <p>A palavra-passe é lida como {@code char[]} e apagada logo a seguir,
  * para não ficar numa {@code String} na memória.
  */
 public class LoginDialog {
+
+    private static final DateTimeFormatter TIME = DateTimeFormatter.ofPattern("HH:mm");
 
     private final JDialog dialog;
     private final ParkingDesk desk;
@@ -84,15 +95,30 @@ public class LoginDialog {
 
     private void submit() {
         char[] secret = password.getPassword();
+        String name = username.getText().strip();
+        LocalDateTime now = LocalDateTime.now();
         dialog.setCursor(Cursor.getPredefinedCursor(Cursor.WAIT_CURSOR));
         try {
-            user = desk.login(username.getText().strip(), secret);
+            user = desk.login(name, secret, now);
+        } catch (SQLException e) {
+            // O login pode ter dado certo e só o registo ter falhado; mesmo
+            // assim não se entra, porque a base não está a gravar.
+            user = null;
+            Errors.saveFailed(dialog, e);
+            return;
         } finally {
             Arrays.fill(secret, ' ');
             dialog.setCursor(Cursor.getDefaultCursor());
         }
         if (user == null) {
-            message.setText(Texts.get("login.failed"));
+            LocalDateTime lockedUntil = desk.lockedUntil(name, now);
+            if (lockedUntil != null) {
+                message.setText(Texts.format("login.locked", lockedUntil.format(TIME),
+                        String.valueOf(AuthService.MAX_FAILED_ATTEMPTS)));
+            } else {
+                message.setText(Texts.get("login.failed"));
+            }
+            dialog.pack();
             password.setText("");
             password.requestFocusInWindow();
             return;

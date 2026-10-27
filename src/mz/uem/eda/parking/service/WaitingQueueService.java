@@ -92,14 +92,33 @@ public class WaitingQueueService {
      */
     public WaitingCar join(Vehicle vehicle, int estimatedMinutes, LocalDateTime arrivedAt) {
         Objects.requireNonNull(vehicle, "vehicle não pode ser null");
+        return join(vehicle, estimatedMinutes, arrivedAt, isPreferential(vehicle));
+    }
+
+    /**
+     * Põe o carro no fim da fila indicada pelo balcão: a preferencial, se o
+     * operador marcou o cliente como preferencial à entrada (idoso, grávida,
+     * pessoa com deficiência), ou a normal.
+     *
+     * @param vehicle a viatura que chegou
+     * @param estimatedMinutes a duração estimada, em minutos
+     * @param arrivedAt a hora de chegada
+     * @param preferentialCustomer se vai para a fila preferencial
+     * @return o registo do carro em espera
+     * @throws IllegalStateException se o carro já estiver estacionado ou já
+     *         estiver à espera
+     * @complexity O(n + w)
+     */
+    public WaitingCar join(Vehicle vehicle, int estimatedMinutes, LocalDateTime arrivedAt,
+            boolean preferentialCustomer) {
+        Objects.requireNonNull(vehicle, "vehicle não pode ser null");
         if (entryService.isParked(vehicle)) {
             throw new IllegalStateException("veículo já parqueado: " + vehicle.getPlate());
         }
         if (isWaiting(vehicle)) {
             throw new IllegalStateException("veículo já está à espera: " + vehicle.getPlate());
         }
-        WaitingCar car = new WaitingCar(vehicle, estimatedMinutes, arrivedAt,
-                isPreferential(vehicle));
+        WaitingCar car = new WaitingCar(vehicle, estimatedMinutes, arrivedAt, preferentialCustomer);
         if (car.isPreferential()) {
             preferential.enqueue(car);
         } else {
@@ -152,6 +171,35 @@ public class WaitingQueueService {
     public boolean isWaiting(Vehicle vehicle) {
         Objects.requireNonNull(vehicle, "vehicle não pode ser null");
         return contains(preferential, vehicle) || contains(normal, vehicle);
+    }
+
+    /**
+     * Tira o carro da fila onde está, sem que entre no parque: o operador
+     * desfez a ida para a fila. Tirar do meio de uma fila faz-se só com
+     * operações de fila: uma volta completa, voltando a enfileirar todos
+     * menos esse. A ordem dos outros fica igual.
+     *
+     * @param vehicle a viatura
+     * @return {@code true} se estava à espera e saiu
+     * @complexity O(w)
+     */
+    public boolean remove(Vehicle vehicle) {
+        Objects.requireNonNull(vehicle, "vehicle não pode ser null");
+        return removeFrom(preferential, vehicle) || removeFrom(normal, vehicle);
+    }
+
+    private static boolean removeFrom(Queue<WaitingCar> queue, Vehicle vehicle) {
+        boolean removed = false;
+        int size = queue.size();
+        for (int i = 0; i < size; i++) {
+            WaitingCar car = queue.dequeue();
+            if (!removed && car.getVehicle().equals(vehicle)) {
+                removed = true;
+            } else {
+                queue.enqueue(car);
+            }
+        }
+        return removed;
     }
 
     /** @return quantos carros esperam na fila preferencial; O(1) */

@@ -1,5 +1,6 @@
 package mz.uem.eda.parking.model;
 
+import java.time.LocalDateTime;
 import java.util.Objects;
 
 public class User {
@@ -14,6 +15,12 @@ public class User {
     private String passwordHash;
     private String salt;
     private int iterations;
+
+    /** Palavras-passe erradas seguidas desde o último login certo (RF03). */
+    private int failedAttempts;
+
+    /** Até quando a conta está bloqueada, ou {@code null} se não estiver. */
+    private LocalDateTime lockedUntil;
 
     //A id serve como indentificador da base de dados
     private long id;
@@ -56,6 +63,67 @@ public class User {
 
     public void changePassword(String passwordHash, String salt, int iterations) {
         setCredentials(passwordHash, salt, iterations);
+    }
+
+    /** @return quantas palavras-passe erradas seguidas houve desde o último login certo */
+    public int getFailedAttempts() {
+        return failedAttempts;
+    }
+
+    /** @return até quando a conta está bloqueada, ou {@code null} se nunca foi bloqueada */
+    public LocalDateTime getLockedUntil() {
+        return lockedUntil;
+    }
+
+    /**
+     * @param now a hora actual
+     * @return {@code true} se a conta estiver bloqueada a esta hora
+     */
+    public boolean isLockedAt(LocalDateTime now) {
+        Objects.requireNonNull(now, "now não pode ser null");
+        return lockedUntil != null && now.isBefore(lockedUntil);
+    }
+
+    /**
+     * Conta uma palavra-passe errada. Ao chegar a {@code maxAttempts}
+     * seguidas, a conta fica bloqueada durante {@code lockMinutes} e a
+     * contagem recomeça.
+     *
+     * @param now a hora da tentativa
+     * @param maxAttempts quantas tentativas erradas seguidas bloqueiam
+     * @param lockMinutes quantos minutos dura o bloqueio
+     * @return {@code true} se esta tentativa bloqueou a conta
+     */
+    public boolean registerFailure(LocalDateTime now, int maxAttempts, int lockMinutes) {
+        Objects.requireNonNull(now, "now não pode ser null");
+        failedAttempts++;
+        if (failedAttempts >= maxAttempts) {
+            failedAttempts = 0;
+            lockedUntil = now.plusMinutes(lockMinutes);
+            return true;
+        }
+        return false;
+    }
+
+    /** Desbloqueia a conta e esquece as tentativas erradas (login certo ou administrador). */
+    public void unlock() {
+        failedAttempts = 0;
+        lockedUntil = null;
+    }
+
+    /**
+     * Repõe o estado do bloqueio lido da base de dados. Só a camada
+     * {@code persistence} chama este método.
+     *
+     * @param attempts as tentativas erradas seguidas, 0 ou mais
+     * @param until até quando está bloqueada, ou {@code null}
+     */
+    public void restoreLock(int attempts, LocalDateTime until) {
+        if (attempts < 0) {
+            throw new IllegalArgumentException("attempts não pode ser negativo: " + attempts);
+        }
+        this.failedAttempts = attempts;
+        this.lockedUntil = until;
     }
 
     /**

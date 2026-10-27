@@ -14,6 +14,7 @@ import java.time.format.DateTimeFormatter;
 
 import javax.swing.ButtonGroup;
 import javax.swing.JButton;
+import javax.swing.JCheckBox;
 import javax.swing.JDialog;
 import javax.swing.JLabel;
 import javax.swing.JOptionPane;
@@ -21,6 +22,7 @@ import javax.swing.JPanel;
 import javax.swing.JRadioButton;
 import javax.swing.JTextField;
 
+import mz.uem.eda.parking.model.MonthlyPass;
 import mz.uem.eda.parking.model.ParkingSession;
 import mz.uem.eda.parking.model.Payment;
 import mz.uem.eda.parking.service.ExitResult;
@@ -40,6 +42,12 @@ import mz.uem.eda.parking.ui.theme.Theme;
  * condutor pagar exactamente o que viu, mesmo que entretanto mude a fracção
  * de 15 minutos.
  *
+ * <p><b>Avença e talão perdido (RF16, RF17).</b> Se a matrícula tiver uma
+ * avença válida, o diálogo diz de quem é e até quando, e a estadia não se
+ * paga. A caixa «Talão perdido» soma a multa da tarifa; o valor a pagar
+ * muda logo que se marca. Se não houver nada a pagar por causa da avença,
+ * os métodos de pagamento ficam desligados.
+ *
  * <p>Devolve o resultado da saída: a janela principal anima as manobras e
  * só depois mostra o recibo, com {@link #showReceipt}: o valor, o método,
  * quantas manobras foram precisas e, se houve, o carro que entrou da fila
@@ -49,19 +57,29 @@ public class ExitDialog {
 
     private static final DateTimeFormatter TIME = DateTimeFormatter.ofPattern("HH:mm");
     private static final DateTimeFormatter DAY_TIME = DateTimeFormatter.ofPattern("dd/MM HH:mm");
+    private static final DateTimeFormatter DATE = DateTimeFormatter.ofPattern("dd/MM/yyyy");
+
+    /** Os métodos que o operador pode escolher: todos menos a avença, que é o programa que atribui. */
+    private static final Payment.Method[] CHOICES = { Payment.Method.CASH, Payment.Method.MPESA,
+        Payment.Method.EMOLA, Payment.Method.CARD };
 
     private final JDialog dialog;
     private final ParkingDesk desk;
     private final JTextField search = new JTextField(16);
     private final JLabel summary = new JLabel();
+    private final JLabel pass = new JLabel();
+    private final JCheckBox lostTicket = new JCheckBox();
     private final JLabel amount = new JLabel();
-    private final JRadioButton[] methods = new JRadioButton[Payment.Method.values().length];
+    private final JRadioButton[] methods = new JRadioButton[CHOICES.length];
     private final JButton find = new JButton(Texts.get("exit.find"));
     private final JButton submit = new JButton(Texts.get("exit.submit"));
     private final JLabel message = new JLabel();
 
     /** O carro encontrado no primeiro passo, ou {@code null}. */
     private ParkingSession found;
+
+    /** Se o carro encontrado tem avença válida. */
+    private boolean covered;
 
     /** A hora a que o valor foi mostrado; é a hora de saída. */
     private LocalDateTime at;
@@ -83,13 +101,19 @@ public class ExitDialog {
         });
 
         amount.setFont(amount.getFont().deriveFont(Font.BOLD, 22f));
+        lostTicket.setText(Texts.format("exit.lost", Texts.money(desk.getTariff().getLostTicketCents())));
+        lostTicket.addActionListener(new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                showAmount();
+            }
+        });
 
-        // Um botão por método de pagamento, pela ordem do enum.
+        // Um botão por método que o operador pode escolher.
         JPanel methodRow = new JPanel(new FlowLayout(FlowLayout.LEFT, Theme.GAP, 0));
         ButtonGroup group = new ButtonGroup();
-        Payment.Method[] options = Payment.Method.values();
-        for (int i = 0; i < options.length; i++) {
-            methods[i] = new JRadioButton(Texts.get("payment." + options[i].name()));
+        for (int i = 0; i < CHOICES.length; i++) {
+            methods[i] = new JRadioButton(Texts.get("payment." + CHOICES[i].name()));
             group.add(methods[i]);
             methodRow.add(methods[i]);
         }
@@ -112,6 +136,8 @@ public class ExitDialog {
         FormPanel form = new FormPanel();
         form.addField(Texts.get("exit.search"), searchRow);
         form.addField(Texts.get("exit.car"), summary);
+        form.addField(Texts.get("exit.pass"), pass);
+        form.addComponent(lostTicket);
         form.addField(Texts.get("exit.amount"), amount);
         form.addField(Texts.get("exit.method"), methodRow);
         form.addMessage(message);
@@ -135,7 +161,27 @@ public class ExitDialog {
      *         ou se a gravação falhou
      */
     public static ExitResult ask(Frame owner, ParkingDesk desk) {
+        return ask(owner, desk, null);
+    }
+
+    /**
+     * Mostra o diálogo já com um carro procurado, por exemplo o que se
+     * escolheu na pesquisa de viaturas.
+     *
+     * @param owner a janela principal
+     * @param desk o balcão onde se faz a saída
+     * @param plateOrTicket a matrícula ou o talão a procurar logo, ou
+     *        {@code null} para começar vazio
+     * @return o resultado da saída, ou {@code null} se o operador cancelou
+     *         ou se a gravação falhou
+     */
+    public static ExitResult ask(Frame owner, ParkingDesk desk, String plateOrTicket) {
         ExitDialog screen = new ExitDialog(owner, desk);
+        if (plateOrTicket != null) {
+            screen.search.setText(plateOrTicket);
+            screen.find();
+            screen.dialog.setLocationRelativeTo(owner);
+        }
         screen.dialog.setVisible(true);
         return screen.result;
     }
@@ -177,11 +223,33 @@ public class ExitDialog {
                 String.valueOf(session.getTicketNumber()), session.getLaneCode(),
                 Texts.get("stay." + session.getStayClass().name()), entered,
                 Texts.format("exit.stayed", String.valueOf(stayed / 60), String.valueOf(stayed % 60))));
-        amount.setText(Texts.money(desk.quote(session, at)));
+
+        MonthlyPass valid = desk.validPass(session.getVehicle().getPlate(), at);
+        covered = valid != null;
+        pass.setText(valid == null ? Texts.get("exit.pass.none")
+                : Texts.format("exit.pass.valid", valid.getCustomerName(), valid.getValidUntil().format(DATE)));
+
         message.setText(" ");
-        setPaymentEnabled(true);
+        lostTicket.setEnabled(true);
+        showAmount();
         dialog.getRootPane().setDefaultButton(submit);
         dialog.pack();
+    }
+
+    /**
+     * Mostra o valor a pagar com o estado da caixa do talão perdido. Os
+     * métodos ficam desligados só quando a avença cobre tudo; uma estadia
+     * dentro da tolerância também dá 0, e aí o método escolhido fica
+     * registado como sempre.
+     */
+    private void showAmount() {
+        if (found == null) {
+            return;
+        }
+        long due = desk.quote(found, at, lostTicket.isSelected());
+        amount.setText(Texts.money(due));
+        setMethodsEnabled(!covered || due > 0);
+        submit.setEnabled(true);
     }
 
     /** Segundo passo: cobra e tira o carro. */
@@ -189,9 +257,8 @@ public class ExitDialog {
         if (found == null) {
             return;
         }
-        Payment.Method method = selectedMethod();
         try {
-            result = desk.exit(found, method, at);
+            result = desk.exit(found, selectedMethod(), at, lostTicket.isSelected());
         } catch (IllegalStateException | IllegalArgumentException e) {
             // Por exemplo, a baia de manobra não tem espaço para os carros de cima.
             message.setText(Texts.format("exit.error.refused", e.getMessage()));
@@ -207,10 +274,19 @@ public class ExitDialog {
     private static String receipt(ExitResult result) {
         Payment payment = result.getPayment();
         ParkingSession session = payment.getSession();
-        String text = Texts.format("exit.done", session.getVehicle().getPlate(),
-                String.valueOf(session.getTicketNumber()), Texts.money(payment.getAmountCents()),
-                Texts.get("payment." + payment.getMethod().name()),
-                String.valueOf(result.getPlan().getManoeuvreCount()));
+        String plate = session.getVehicle().getPlate();
+        String ticket = String.valueOf(session.getTicketNumber());
+        String manoeuvres = String.valueOf(result.getPlan().getManoeuvreCount());
+        String text;
+        if (payment.getMethod() == Payment.Method.PASS) {
+            text = Texts.format("exit.done.pass", plate, ticket, manoeuvres);
+        } else {
+            text = Texts.format("exit.done", plate, ticket, Texts.money(payment.getAmountCents()),
+                    Texts.get("payment." + payment.getMethod().name()), manoeuvres);
+        }
+        if (payment.getLostTicketCents() > 0) {
+            text += Texts.format("exit.done.lost", Texts.money(payment.getLostTicketCents()));
+        }
         ParkingSession admitted = result.getAdmitted();
         if (admitted != null) {
             text += Texts.format("exit.admitted", admitted.getVehicle().getPlate(), admitted.getLaneCode());
@@ -219,29 +295,32 @@ public class ExitDialog {
     }
 
     private Payment.Method selectedMethod() {
-        Payment.Method[] options = Payment.Method.values();
         for (int i = 0; i < methods.length; i++) {
             if (methods[i].isSelected()) {
-                return options[i];
+                return CHOICES[i];
             }
         }
-        return options[0];
+        return CHOICES[0];
     }
 
     /** Volta ao primeiro passo: nada encontrado, nada para cobrar. */
     private void showNothingFound() {
         found = null;
+        covered = false;
         at = null;
         summary.setText(Texts.get("exit.summary.empty"));
+        pass.setText(" ");
+        lostTicket.setSelected(false);
+        lostTicket.setEnabled(false);
         amount.setText("—");
-        setPaymentEnabled(false);
+        setMethodsEnabled(false);
+        submit.setEnabled(false);
         dialog.getRootPane().setDefaultButton(find);
     }
 
-    private void setPaymentEnabled(boolean enabled) {
+    private void setMethodsEnabled(boolean enabled) {
         for (JRadioButton method : methods) {
             method.setEnabled(enabled);
         }
-        submit.setEnabled(enabled);
     }
 }

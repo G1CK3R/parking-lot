@@ -1,5 +1,6 @@
 package mz.uem.eda.parking.service;
 
+import java.time.LocalDateTime;
 import java.util.Objects;
 
 import mz.uem.eda.parking.model.User;
@@ -22,11 +23,24 @@ import mz.uem.eda.parking.structures.Queue;
  * <p>As operações de administração recebem o utilizador que as pede e
  * recusam-nas se ele não for administrador (RF02). A interface também
  * esconde esses menus, mas a regra vive aqui.
+ *
+ * <p><b>Bloqueio (RF03).</b> {@value #MAX_FAILED_ATTEMPTS} palavras-passe
+ * erradas seguidas bloqueiam a conta durante {@value #LOCK_MINUTES} minutos;
+ * durante o bloqueio nem a palavra-passe certa entra. Um login certo esquece
+ * as tentativas. O administrador pode desbloquear antes, e repor a
+ * palavra-passe também desbloqueia. Como o bloqueio acaba sozinho, o último
+ * administrador nunca fica trancado para sempre.
  */
 public class AuthService {
 
     /** Comprimento mínimo de uma palavra-passe nova. */
     public static final int MIN_PASSWORD_LENGTH = 8;
+
+    /** Quantas palavras-passe erradas seguidas bloqueiam a conta. */
+    public static final int MAX_FAILED_ATTEMPTS = 5;
+
+    /** Quantos minutos dura o bloqueio. */
+    public static final int LOCK_MINUTES = 15;
 
     private final PasswordHasher hasher;
     private final Queue<User> users;
@@ -95,16 +109,57 @@ public class AuthService {
      * @complexity O(u) para encontrar o nome, mais o custo fixo do PBKDF2
      */
     public User login(String username, char[] password) {
+        return login(username, password, LocalDateTime.now());
+    }
+
+    /**
+     * Verifica o nome e a palavra-passe, com o bloqueio por tentativas
+     * erradas (RF01, RF03).
+     *
+     * @param username o nome escrito
+     * @param password a palavra-passe escrita
+     * @param now a hora da tentativa
+     * @return o utilizador autenticado, ou {@code null} se o nome não
+     *         existir, se a palavra-passe estiver errada ou se a conta
+     *         estiver bloqueada
+     * @complexity O(u) para encontrar o nome, mais o custo fixo do PBKDF2
+     */
+    public User login(String username, char[] password, LocalDateTime now) {
         Objects.requireNonNull(username, "username não pode ser null");
         Objects.requireNonNull(password, "password não pode ser null");
+        Objects.requireNonNull(now, "now não pode ser null");
         User user = find(username);
-        if (user == null) {
+        if (user == null || user.isLockedAt(now)) {
             hasher.matches(password, dummyHash, dummySalt, hasher.getIterations());
             return null;
         }
         boolean ok = hasher.matches(password, user.getPasswordHash(), user.getSalt(),
                 user.getIterations());
-        return ok ? user : null;
+        if (ok) {
+            user.unlock();
+            return user;
+        }
+        user.registerFailure(now, MAX_FAILED_ATTEMPTS, LOCK_MINUTES);
+        return null;
+    }
+
+    /**
+     * Desbloqueia uma conta antes de o bloqueio acabar. Só um administrador
+     * pode.
+     *
+     * @param admin quem pede
+     * @param username o utilizador a desbloquear
+     * @return {@code true} se desbloqueou, {@code false} se o nome não existir
+     * @throws SecurityException se {@code admin} não for administrador
+     */
+    public boolean unlock(User admin, String username) {
+        requireAdmin(admin);
+        User user = find(username);
+        if (user == null) {
+            return false;
+        }
+        user.unlock();
+        return true;
     }
 
     /**
@@ -146,7 +201,8 @@ public class AuthService {
 
     /**
      * Define uma palavra-passe nova a outro utilizador, por exemplo se ele a
-     * esqueceu (RF22). Só um administrador pode, e não precisa da antiga.
+     * esqueceu (RF22). Só um administrador pode, e não precisa da antiga. Se
+     * a conta estava bloqueada, fica desbloqueada.
      *
      * @param admin quem pede
      * @param username o utilizador a alterar
@@ -162,6 +218,7 @@ public class AuthService {
             return false;
         }
         setPassword(user, replacement);
+        user.unlock();
         return true;
     }
 

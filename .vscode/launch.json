@@ -16,6 +16,14 @@
             "mainClass": "mz.uem.eda.parking.simulation.Simulator",
             "cwd": "${workspaceFolder}",
             "classPaths": ["$Auto", "${workspaceFolder}/resources"]
+        },
+        {
+            "type": "java",
+            "name": "Medição da busca sequencial (gera o CSV)",
+            "request": "launch",
+            "mainClass": "mz.uem.eda.parking.simulation.SearchBenchmark",
+            "cwd": "${workspaceFolder}",
+            "classPaths": ["$Auto", "${workspaceFolder}/resources"]
         }
     ]
 }

@@ -1,7 +1,7 @@
 # Parque de Estacionamento
 
 Sistema desktop de gestão de um parque de estacionamento denso, escrito em Java com Swing.
-Trabalho semestral de **Estruturas de Dados e Algoritmos** — Faculdade de Engenharia, UEM.
+Trabalho semestral de **Estruturas de Dados e Algoritmos**, Faculdade de Engenharia, UEM.
 
 > **Restrição da cadeira: apenas pilha e fila.** Não há tabelas de dispersão, árvores, grafos nem
 > filas de prioridade. A lista ligada é permitida só como suporte interno de implementação dos dois
@@ -45,6 +45,7 @@ ficam uns atrás dos outros.
   servidas por uma política de atendimento. É assim que se tem prioridade sem fila de prioridade.
 - **Reservas** guardam um lugar durante 30 minutos. Como a tolerância é igual para todas, a ordem de
   criação é a ordem de expiração, e uma fila simples resolve a expiração.
+- **Desfazer** usa uma pilha de operações: a última entrada ou reserva é a primeira a ser desfeita.
 
 O problema algorítmico central é **em que baia colocar o carro que acaba de chegar**: a decisão de agora
 determina quantas manobras se pagam daqui a umas horas. O sistema tem quatro políticas de colocação e
@@ -54,18 +55,24 @@ compara-as por simulação.
 
 | Onde | O quê | Requisitos |
 | --- | --- | --- |
-| Arranque | Login com utilizador e palavra-passe (PBKDF2); na primeira vez, cria o administrador | RF01, RF02 |
+| Arranque | Login com utilizador e palavra-passe (PBKDF2); na primeira vez, cria o administrador; 5 palavras-passe erradas seguidas bloqueiam a conta 15 minutos | RF01, RF02, RF03 |
 | Ecrã principal | O parque visto de cima: as 22 baias, cada carro com a sua cor, a classe da baia, o topo da pilha e a ocupação; dica do rato com talão, entrada e manobras | RF04, RF05 |
 | Painel lateral | As duas filas de espera, com o tempo de espera, e os últimos 20 movimentos | RF05 |
-| Operações → Entrada (F2) | Matrícula, tipo e duração declarada; atribuição automática da baia; talão; animação do carro até à baia; fila de espera se o parque estiver cheio | RF06 |
-| Operações → Saída (F3) | Procura por matrícula ou talão; valor a pagar; método de pagamento; animação das manobras; recibo; entra o primeiro da fila de espera | RF07, RF08, RF09, RF14, RF15 |
-| Operações → Reservas (F5) | Reservas activas com o tempo que falta, nova reserva, cancelar; o check-in é a entrada normal | RF10, RF11, RF12 |
-| Operações → Fecho de caixa (F4) | O que quem está na sessão cobrou desde que entrou, por método de pagamento | RF21 |
+| Operações → Entrada (F2) | Matrícula, tipo, duração declarada e cliente preferencial; atribuição automática da baia; talão; animação do carro até à baia; fila de espera (normal ou preferencial) se o parque estiver cheio | RF06 |
+| Operações → Saída (F3) | Procura por matrícula ou talão; valor a pagar (com noite e fim-de-semana); avença; multa por talão perdido; método de pagamento; animação das manobras; recibo; entra o primeiro da fila de espera | RF07, RF08, RF14, RF15, RF16, RF17 |
+| Operações → Pesquisar viatura (F7) | Pesquisa enquanto se escreve, por pedaço da matrícula ou talão; mostra a baia, quantos carros tem por cima e as manobras; «Dar saída…» abre a saída com esse carro | RF09 |
+| Operações → Reservas (F5) | Reservas activas com o tempo que falta, nova reserva, cancelar; o check-in é a entrada normal; cancelar deixa entrar o primeiro da fila de espera | RF10, RF11, RF12 |
+| Operações → Avenças (F6) | Avenças mensais vendidas, com o estado; nova avença (cliente, telefone, matrícula, mês, método); a matrícula sai sem pagar a estadia nesse mês | RF16 |
+| Operações → Desfazer (Ctrl+Z) | Desfaz a última entrada (o carro sai sem pagar e o talão fica anulado), ida para a fila, reserva ou cancelamento; o menu diz o que vai desfazer | RF06, RF10 |
+| Operações → Fecho de caixa (F4) | O que quem está na sessão cobrou desde que entrou (estadias e avenças), por método de pagamento | RF21 |
 | Sessão | Mudar a própria palavra-passe; terminar sessão | RF03 |
-| Administração → Utilizadores | Criar operadores e administradores, repor palavras-passe, retirar utilizadores | RF22 |
-| Administração → Tarifa | Tolerância, fracção, valor por hora e tecto diário, com exemplos antes de gravar | RF13 |
-| Administração → Relatórios | Receita por dia, por operador e por método; lista de pagamentos em três ordens; exportar CSV | RF18, RF20 |
+| Administração → Utilizadores | Criar operadores e administradores, repor palavras-passe, desbloquear contas, retirar utilizadores | RF03, RF22 |
+| Administração → Tarifa | Tolerância, fracção, valor por hora, tecto diário, valor de noite, desconto ao fim-de-semana, multa e avença, com exemplos antes de gravar | RF13, RF16, RF17 |
+| Administração → Relatórios | Receita por dia, por operador e por método; lista de pagamentos em três ordens; avenças vendidas; exportar CSV | RF18, RF20 |
+| Administração → Histórico de estadias | Todas as estadias com filtros (período, matrícula, operador, no parque ou já saíram); exportar CSV; imprimir ou gravar em PDF | RF20 |
+| Administração → Registo de auditoria | Quem fez cada operação sensível e quando, com filtros por período, utilizador e operação | RF23 |
 | Administração → Simulação | Compara as 16 combinações de políticas em dias simulados; gráficos de manobras e de ocupação; exportar CSV | RF19 |
+| Administração → Cópia de segurança e Restaurar | Grava todas as tabelas num ficheiro e repõe-nas numa só transacção | RF24 |
 
 Tudo fica gravado em MySQL: fechar e voltar a abrir repõe o parque exactamente como estava, com cada
 carro na mesma posição de cada baia.
@@ -81,10 +88,11 @@ com `ArrayStack`, `LinkedStack` e `LinkedQueue` por trás.
 | --- | --- | --- |
 | Pilha | Cada baia de estacionamento (`Lane`) | Beco sem saída: o último a entrar é o primeiro a sair |
 | Pilha | Baia de manobra | Guarda os carros de cima enquanto se tira o de baixo; voltam pela ordem inversa, que repõe a original |
+| Pilha | Operações para desfazer (`Operation`, na `ParkingDesk`) | Desfaz-se sempre a última; desfazer várias vezes segue a ordem inversa. Esvazia-se a cada saída, mudança de operador e entrada a partir da fila de espera |
 | Fila | Plano de manobras (`RetrievalPlan`) | A saída calcula-se toda de uma vez; a animação consome os movimentos pela ordem |
-| Fila | Filas de espera, normal e preferencial | Quem chega primeiro entra primeiro, em cada fila |
-| Fila | Reservas | Tolerância constante ⇒ a da frente é sempre a próxima a expirar |
-| Fila | Histórico de pagamentos, últimos movimentos, utilizadores | Crescem pelo fim e lêem-se pela ordem do tempo |
+| Fila | Filas de espera, normal e preferencial | Quem chega primeiro entra primeiro, em cada fila; tirar um carro do meio (desfazer) é uma volta completa à fila |
+| Fila | Reservas | Tolerância constante ⇒ a da frente é sempre a próxima a expirar. Uma reserva cancelada fica na fila até à sua hora, para o cancelamento se poder desfazer |
+| Fila | Histórico de pagamentos, avenças, registo de auditoria, últimos movimentos, utilizadores | Crescem pelo fim e lêem-se pela ordem do tempo |
 | Fila | Chegadas da simulação | A «fila de eventos» do dia, ordenada por minuto |
 
 ### Algoritmos sobre pilhas e filas
@@ -93,12 +101,16 @@ Em `algorithms/`, cada um com a complexidade no Javadoc e com testes:
 
 | Algoritmo | Complexidade | Onde é usado |
 | --- | --- | --- |
-| Radix sort com 10 filas (`QueueRadixSort`) | O(d·n), sem comparações | Relatórios (pela hora, talão, valor, operador, método) e chegadas da simulação |
-| Ordenação com duas pilhas (`TwoStackSort`) | O(n²) | Pagamentos do turno no fecho de caixa, com o número de comparações no ecrã |
+| Radix sort com 10 filas (`QueueRadixSort`) | O(d·n), sem comparações | Relatórios (pela hora, talão, valor, operador, método), histórico (duas passagens: talão e depois minuto de entrada) e chegadas da simulação |
+| Ordenação com duas pilhas (`TwoStackSort`) | O(n²) | Pagamentos e avenças do turno no fecho de caixa, com o número de comparações no ecrã |
 | Inversão com uma pilha | O(n) | Ordem por valor do maior para o menor, nos relatórios |
 | Totais por grupos seguidos | O(n) depois de ordenar | Receita por dia, operador e método, sem tabela de dispersão |
-| Busca sequencial (`SequentialSearch`) | O(n) | Procurar um carro por matrícula ou talão; dá a profundidade *k* |
+| Busca sequencial (`SequentialSearch`) | O(n) | Procurar um carro por matrícula ou talão; pesquisa de viaturas; filtros do histórico e da auditoria; dá a profundidade *k* |
 | Fusão de duas filas ordenadas (`QueueMerge`) | O(n + m) | Disponível e testada, para juntar históricos já ordenados |
+
+O custo da busca sequencial está medido em `docs/measurements/search.csv` (configuração «Medição da
+busca sequencial» no VS Code): as comparações crescem exactamente como n e, com os 200 lugares do
+parque, o pior caso fica abaixo de um microssegundo.
 
 ---
 
@@ -109,18 +121,30 @@ para que nenhum carro fique irrecuperável).
 
 | Classe de permanência | Código | Baias | Profundidade | Lugares |
 | --- | --- | --- | --- | --- |
-| Curta duração (até 2 h) | C01–C04 | 4 | 5 | 20 |
-| Jornada completa (até 24 h) | J01–J16 | 16 | 10 | 160 |
-| Permanência longa (mais de 24 h) | P01–P02 | 2 | 10 | 20 |
-| Baia de manobra | M | 1 | 10 | — |
+| Curta duração (até 2 h) | C01 a C04 | 4 | 5 | 20 |
+| Jornada completa (até 24 h) | J01 a J16 | 16 | 10 | 160 |
+| Permanência longa (mais de 24 h) | P01 e P02 | 2 | 10 | 20 |
+| Baia de manobra | M | 1 | 10 | |
 
 A classe de cada carro sai da **duração que o condutor declara à entrada**. A segregação baseia-se no
-horário de trabalho típico em Maputo (8h–17h): o grosso das chegadas concentra-se entre as **7h e as
+horário de trabalho típico em Maputo (8h às 17h): o grosso das chegadas concentra-se entre as **7h e as
 9h** e as saídas entre as **16h e as 18h**.
 
-**Tarifa de origem** (muda-se em Administração → Tarifa): 15 minutos de tolerância gratuita, fracções
-de 15 minutos, 60 MZN por hora e tecto diário de 400 MZN. Os valores guardam-se em centavos, num
-`long`, para as contas serem exactas.
+**Tarifa de origem** (muda-se em Administração → Tarifa):
+
+| Regra | Valor |
+| --- | --- |
+| Tolerância gratuita | 15 minutos |
+| Fracção mínima | 15 minutos |
+| Valor por hora, de dia | 60 MZN |
+| Valor por hora, de noite (20h às 7h) | 30 MZN |
+| Desconto ao sábado e ao domingo | 20 % |
+| Tecto diário | 400 MZN por cada 24 h |
+| Multa por talão perdido | 500 MZN |
+| Avença mensal | 3 500 MZN |
+
+Cada fracção paga o valor da hora a que começa, por isso uma estadia das 19h às 21h paga uma hora de
+dia e uma de noite. Os valores guardam-se em centavos, num `long`, para as contas serem exactas.
 
 ---
 
@@ -201,6 +225,10 @@ primeiro `sql/01-schema.sql` e depois `sql/02-seed.sql`.
 Estes dois ficheiros correm **sempre do zero** e apagam os dados gravados. Nunca alterem tabelas à mão:
 se o esquema mudar, muda-se o `.sql` e volta-se a correr. É o que impede o «na minha máquina funciona».
 
+> **Quem já tinha a base de uma versão anterior** tem de voltar a correr os dois ficheiros: o esquema
+> ganhou as tabelas `monthly_passes` e `audit_log` e colunas novas em `users`, `tariffs` e `payments`.
+> Sem isso, o programa diz que a base está desactualizada.
+
 Para não usar o `root` no dia-a-dia, criem um utilizador próprio:
 
 ```sql
@@ -256,9 +284,10 @@ A configuração está em `.vscode/` e é igual para todos:
 
 - `settings.json`: `src` e `test` são as pastas de código, os jars de `lib/` entram no classpath,
   ficheiros em UTF-8
-- `launch.json`: duas configurações, «Parque de Estacionamento» (o programa) e «Simulação (gera o
-  CSV)» (o `Simulator.main`, que escreve `docs/measurements/simulation.csv`); as duas arrancam na raiz
-  do projecto e com `resources/` no classpath
+- `launch.json`: três configurações, «Parque de Estacionamento» (o programa), «Simulação (gera o
+  CSV)» (o `Simulator.main`, que escreve `docs/measurements/simulation.csv`) e «Medição da busca
+  sequencial (gera o CSV)» (o `SearchBenchmark.main`, que escreve `docs/measurements/search.csv`); as
+  três arrancam na raiz do projecto e com `resources/` no classpath
 - `extensions.json`: sugere o *Extension Pack for Java* a quem abre a pasta
 
 **Não alterem estes três ficheiros na vossa máquina.** Se for preciso mudar alguma coisa, muda-se no
@@ -272,20 +301,49 @@ esquema está desactualizado. Ver [Problemas comuns](#problemas-comuns).
 
 ## Usar o programa
 
-**Atalhos:** F2 entrada · F3 saída · F4 fecho de caixa · F5 reservas · Esc salta a animação.
+**Atalhos:** F2 entrada · F3 saída · F4 fecho de caixa · F5 reservas · F6 avenças · F7 pesquisar
+viatura · Ctrl+Z desfazer · Esc salta a animação.
 
 **Uma entrada.** F2, matrícula, tipo de viatura e quanto tempo o condutor diz que fica. O programa
 escolhe a baia, anima o carro desde a entrada e mostra o talão. Se o parque estiver cheio, o carro fica
-na fila de espera e aparece no painel lateral. Se a matrícula tiver reserva, entra com a duração da
+na fila de espera e aparece no painel lateral; marcando «Cliente preferencial» (idoso, grávida, pessoa
+com deficiência), espera na fila preferencial. Se a matrícula tiver reserva, entra com a duração da
 reserva.
 
 **Uma saída.** F3, matrícula ou número do talão, Procurar. Aparece o valor a pagar, calculado à hora
-da procura. Escolhe-se o método de pagamento e carrega-se em «Cobrar e dar saída». A animação mostra
-cada manobra: os carros de cima vão para a baia de manobra, o carro sai, e os outros voltam pela mesma
-ordem. No fim aparece o recibo e, se houver alguém à espera, ele entra.
+da procura. Se a matrícula tiver avença válida, o diálogo diz de quem é e a estadia não se paga. Se o
+condutor perdeu o talão, marca-se «Talão perdido» e soma-se a multa. Escolhe-se o método de pagamento e
+carrega-se em «Cobrar e dar saída». A animação mostra cada manobra: os carros de cima vão para a baia de
+manobra, o carro sai, e os outros voltam pela mesma ordem. No fim aparece o recibo e, se houver alguém
+à espera, ele entra.
+
+**Procurar um carro.** F7 e escrever um pedaço da matrícula ou o talão: a lista filtra-se enquanto se
+escreve e diz quantos carros cada um tem por cima. «Dar saída…» (ou duplo clique) abre a saída com
+esse carro.
+
+**Desfazer.** Ctrl+Z (ou o botão «Desfazer» por cima do parque) desfaz a última entrada, ida para a
+fila, reserva ou cancelamento de reserva; o menu Operações diz exactamente o que vai ser desfeito.
+Desfazer uma entrada pede confirmação: o carro sai do topo da baia sem pagar e o talão fica anulado.
+As saídas não se desfazem, porque já houve dinheiro.
+
+**Avenças.** F6, «Nova avença…», nome e telefone do cliente, matrícula, mês (o actual ou um dos dois
+seguintes) e método de pagamento. O valor é o da tarifa e conta na receita e no fecho de caixa de quem
+vende.
+
+**Fila de espera.** Quando um lugar fica livre sem haver saída (uma reserva cancelada ou expirada, uma
+entrada desfeita), o primeiro da fila entra sozinho: logo, no caso do cancelamento e do desfazer, e em
+menos de 30 segundos, no caso das reservas que expiram.
 
 **Durante uma animação** as operações ficam bloqueadas; o parque real já está no estado final, e a
 animação é só a reprodução. No fim, a animação confere que reproduziu exactamente o estado real.
+
+**Conta bloqueada.** Cinco palavras-passe erradas seguidas bloqueiam a conta durante 15 minutos, e o
+ecrã de entrada diz até quando. O administrador pode desbloqueá-la antes, em Administração →
+Utilizadores; dar uma palavra-passe nova também desbloqueia.
+
+**Cópia de segurança.** Administração → Cópia de segurança… grava um ficheiro `.backup` com todas as
+tabelas. Restaurar cópia… substitui tudo o que está na base pelo conteúdo do ficheiro, numa só
+transacção (ou fica tudo da cópia, ou não muda nada); depois o programa fecha e abre-se de novo.
 
 **Perfis.** O operador vê Sessão e Operações. O administrador vê também o menu Administração. O
 administrador não se pode retirar a si próprio nem retirar o último administrador.
@@ -297,13 +355,13 @@ administrador não se pode retirar a si próprio nem retirar o último administr
 No separador **Testing** do VS Code (o ícone do frasco na barra lateral) aparecem todos os testes de
 `test/`. O botão ▶ no topo corre-os todos; também se pode correr só uma classe ou um teste.
 
-São **292 testes**, todos a passar:
+São **324 testes**, todos a passar:
 
 | Pasta | O que testa |
 | --- | --- |
 | `structures/` | O contrato de cada TAD: vazio, cheio, ordem de saída, excepções |
 | `algorithms/` | Radix sort, duas pilhas, fusão e busca sequencial, com casos aleatórios |
-| `service/` | Entrada, saída e plano de manobras (2k), tarifa, filas de espera, reservas, autenticação, relatórios e a `ParkingDesk` inteira |
+| `service/` | Entrada, saída e plano de manobras (2k), tarifa (noite, fim-de-semana, multa, avença), filas de espera, reservas, avenças, autenticação e bloqueio, relatórios, histórico e a `ParkingDesk` inteira (desfazer, auditoria, cópia de segurança e restauro) |
 | `service/policy/` | As quatro políticas de colocação e as duas de atendimento, sobre cenários fixos |
 | `persistence/` | Gravar e repor o parque, os utilizadores, as tarifas e os pagamentos |
 | `simulation/` | Gerador de chegadas, métricas (incluindo a ocupação), simulador e comparação |
@@ -335,11 +393,15 @@ ui  ──►  service (ParkingDesk)  ──►  persistence (JDBC)
   um método por botão. Não conhece baias, pilhas, filas nem a base de dados. A única excepção é o ecrã
   de simulação, que fala com a camada `simulation`, uma ferramenta de medição à parte.
 - **A `ParkingDesk` chama os serviços pela ordem certa e grava o resultado.** Uma saída, por exemplo:
-  cobrar, tirar o carro com as manobras, gravar numa transacção, juntar o pagamento ao histórico e
-  deixar entrar o primeiro da fila de espera.
+  cobrar (com avença e multa), tirar o carro com as manobras, gravar numa transacção, juntar o pagamento
+  ao histórico, registar a multa na auditoria e deixar entrar o primeiro da fila de espera.
+- **A `ParkingDesk` guarda a pilha de operações** para desfazer e escreve o **registo de auditoria**
+  depois de cada operação sensível já gravada. Os pormenores da auditoria guardam-se como valores
+  separados por `|`; é a interface que os escreve em português.
 - **A hora vem sempre de fora**, como parâmetro. A interface passa a hora actual; os testes passam a
   hora que quiserem.
 - **A base de dados só guarda e repõe.** Procurar, ordenar e contar é trabalho das nossas estruturas.
+  A cópia de segurança é um ficheiro de texto do próprio programa, escrito e lido com `PreparedStatement`.
 - **A animação não decide nada.** O serviço faz a operação inteira de uma vez e devolve o plano de
   movimentos; a interface reproduz o plano sobre uma fotografia do parque tirada antes.
 - **A simulação corre num `SwingWorker`**, com baias, serviços e políticas próprios: não toca no parque
@@ -357,7 +419,7 @@ parking-lot/
 ├── sql/                         01-schema.sql, 02-seed.sql
 ├── resources/                   strings_pt.properties, config.properties.example
 ├── docs/
-│   ├── measurements/            simulation.csv, gerado pelo simulador
+│   ├── measurements/            simulation.csv e search.csv, gerados pelas medições
 │   ├── report/                  relatório
 │   ├── diagrams/                diagramas
 │   └── mockups/                 maquetes
@@ -365,11 +427,11 @@ parking-lot/
 │   ├── Main.java                arranque: configuração, políticas, login
 │   ├── structures/              Stack, Queue e implementações; excepções
 │   ├── algorithms/              radix sort, duas pilhas, fusão, busca sequencial
-│   ├── model/                   Lane, ParkingSession, Vehicle, Tariff, Payment, Reservation, User, Move, RetrievalPlan…
-│   ├── service/                 ParkingDesk e os serviços (entrada, saída, tarifa, espera, reservas, autenticação, relatórios)
+│   ├── model/                   Lane, ParkingSession, Vehicle, Tariff, Payment, MonthlyPass, Reservation, User, AuditEntry, Move, RetrievalPlan…
+│   ├── service/                 ParkingDesk e os serviços (entrada, saída, tarifa, espera, reservas, avenças, autenticação, auditoria, relatórios)
 │   │   └── policy/              políticas de colocação e de atendimento
-│   ├── persistence/             repositórios JDBC; security/ com o PBKDF2
-│   ├── simulation/              gerador de chegadas, simulador, métricas, comparação
+│   ├── persistence/             repositórios JDBC, cópia de segurança; security/ com o PBKDF2
+│   ├── simulation/              gerador de chegadas, simulador, métricas, comparação, medição da busca
 │   └── ui/                      janela principal, painel do parque, painel lateral, animação, textos
 │       ├── dialogs/             todos os diálogos e os dois gráficos
 │       └── theme/               cores e espaçamentos
@@ -387,7 +449,8 @@ O papel exacto de **cada ficheiro** está em
   Javadoc e comentários em português; todo o texto visível ao utilizador vive em
   `resources/strings_pt.properties` e lê-se com `Texts.get` ou `Texts.format`. Nenhuma frase em
   português dentro do código da interface. Nesses textos não se usa o apóstrofo (o `MessageFormat`
-  trata-o à parte).
+  trata-o à parte). Os textos do próprio Swing (escolher ficheiro, Cancelar) saem em português do
+  Brasil, a única tradução que o Java traz.
 - **Nomes próprios dos TAD.** As nossas interfaces chamam-se `Stack` e `Queue` e colidem com as de
   `java.util`: é propositado. Nenhum ficheiro do domínio importa `java.util.Stack`, `java.util.Queue`,
   listas ou mapas. A interface pode usar colecções do `java.util` para os modelos do Swing (ADR-028).
@@ -405,7 +468,8 @@ O papel exacto de **cada ficheiro** está em
    */
   ```
 
-- **Sem expressões lambda.** Usam-se classes anónimas (`new ActionListener() { … }`), como nas aulas.
+- **Sem expressões lambda no código do programa.** Usam-se classes anónimas
+  (`new ActionListener() { … }`), como nas aulas.
 - **Sem `hashCode()`.** As classes do modelo redefinem `equals` mas não usam tabelas de dispersão; os
   avisos de compilação por isso são conhecidos e aceites.
 - **Composição em vez de herança no Swing.** As janelas e diálogos têm um `JFrame` ou `JDialog` lá
@@ -416,8 +480,7 @@ O papel exacto de **cada ficheiro** está em
 - **Valores em centavos, num `long`.** Nunca `double` para dinheiro.
 - `PreparedStatement` em todas as consultas, sem excepção.
 
-O projecto compila com **7 avisos conhecidos**: 5 de `equals` sem `hashCode` (de propósito), 1 de um
-construtor de `Locale` deprecado em `Texts` e 1 de tipo genérico em bruto no `QueueRadixSort`.
+O projecto compila com **5 avisos conhecidos**, todos de `equals` sem `hashCode` (de propósito).
 
 ---
 
@@ -431,7 +494,7 @@ Cada frente é dona dos seus ficheiros. Ninguém escreve na pasta de outra pesso
 | --- | --- |
 | Coordenação | `.vscode/`, `lib/`, `sql/`, este README, revisão das integrações |
 | Estruturas | `structures/`, `algorithms/` e os seus testes |
-| Domínio | `model/`, `persistence/`, serviços de entrada, saída, tarifa e reservas |
+| Domínio | `model/`, `persistence/`, serviços de entrada, saída, tarifa, reservas e avenças |
 | Políticas | `service/policy/`, `WaitingQueueService` e os seus testes |
 | Interface | `ui/`, `strings_pt.properties`, maquetes |
 | Simulação | `simulation/`, `docs/measurements/`, gráficos |
@@ -460,6 +523,9 @@ Cada frente é dona dos seus ficheiros. Ninguém escreve na pasta de outra pesso
 | Ao arrancar: «O MySQL recusou o utilizador ou a palavra-passe» | credenciais erradas em `config.properties` | Rever `db.user` e `db.password` |
 | Ao arrancar: «A base de dados ainda não foi criada» | os ficheiros de `sql/` não correram | Correr `01-schema.sql` e depois `02-seed.sql` |
 | Ao arrancar: «A base de dados está desactualizada» | o esquema mudou desde a última vez | Correr de novo os dois ficheiros (apaga os dados) |
+| «Conta bloqueada até às…» | cinco palavras-passe erradas seguidas | Esperar 15 minutos, ou um administrador desbloqueia em Utilizadores |
+| Imprimir o histórico: «No print service found» | o sistema não tem nenhuma impressora, nem de PDF | No Windows, activar «Microsoft Print to PDF»; no Linux, instalar o CUPS (com o `cups-pdf`); no macOS já existe |
+| Restaurar: «não é uma cópia de segurança do parque» | o ficheiro escolhido não foi feito em Administração → Cópia de segurança | Escolher um ficheiro `.backup` feito pelo programa; a base fica como estava |
 | Imports de `structures` ou do JUnit sublinhados a vermelho | pasta errada aberta, ou o Java ainda a carregar | Abrir a raiz `parking-lot`; esperar pelo fim de «Java: Loading»; se persistir, *Java: Clean Java Language Server Workspace* |
 | `duplicate class` ao compilar | o mesmo ficheiro em `src/` e em `test/` | Apagar a cópia que está na pasta errada |
 | Não aparece o botão **Run** | falta o *Extension Pack for Java* | Instalar a extensão e reabrir a pasta |
@@ -474,16 +540,23 @@ Cada frente é dona dos seus ficheiros. Ninguém escreve na pasta de outra pesso
 
 Decisões assumidas, a defender no relatório:
 
-- **Um só posto de atendimento.** A `ParkingDesk` guarda um utilizador autenticado de cada vez.
+- **Um só posto de atendimento.** A `ParkingDesk` guarda um utilizador autenticado de cada vez, e o
+  parque em memória é o de um só programa aberto. Dois postos ao mesmo tempo precisavam de um servidor
+  a coordenar as baias, o que sai do âmbito da cadeira.
 - **As filas de espera não são gravadas.** Ao reabrir começam vazias: quem esperava já não está à porta.
-- **A procura por matrícula ou talão é O(n).** Com 200 lugares, o pior caso são 200 comparações.
-- **Cancelar ou expirar uma reserva liberta o lugar, mas não chama o primeiro da fila de espera**; só
-  uma saída o faz.
-- **A entrada não pergunta se o cliente é preferencial**: no programa, todos vão para a fila normal, e a
-  fila preferencial só se vê na simulação.
+- **A procura por matrícula ou talão é O(n).** Está medida: com 200 lugares, o pior caso são 200
+  comparações e menos de um microssegundo.
+- **Só se desfazem entradas e reservas.** Uma saída não se desfaz, porque já houve dinheiro; por isso a
+  pilha de operações esvazia-se a cada saída. Desfazer a entrada de um carro que tinha reserva não
+  devolve a reserva: o condutor faz uma nova, se ainda quiser.
+- **Avença com valor único e uma matrícula.** O mesmo preço para todos e uma matrícula por avença,
+  sempre para um mês de calendário inteiro.
+- **As horas da noite (20h às 7h) e os dias do fim-de-semana são fixos**; mudam-se os valores, não os
+  períodos.
+- **Restaurar uma cópia obriga a reabrir o programa**, porque o que está em memória deixa de
+  corresponder à base.
 - **Pagamentos só registados**: numerário, M-Pesa, e-Mola e cartão, sem ligação a nenhum serviço de
   pagamento (ADR-027).
-- **Não há desfazer**, avenças mensais, log de auditoria nem bloqueio da conta após tentativas falhadas.
 
 ---
 
@@ -495,17 +568,18 @@ Decisões assumidas, a defender no relatório:
 | [Estrutura do Projecto](https://claude.ai/artifact/DrhrM9oSuV2iHCj79xgbgD) | Arquitectura, papel de cada ficheiro, esquema da base, plano até à entrega |
 | [Página do projecto no Notion](https://app.notion.com/p/3f0bafe4467a8178b180ebc21e573df6) | Requisitos, decisões (ADR) abertas e fechadas, estruturas e algoritmos, registo de cada passo |
 | `docs/measurements/simulation.csv` | Uma linha por dia simulado: manobras, pico, esperas, ocupação |
+| `docs/measurements/search.csv` | Tempo e comparações da busca sequencial, numa pilha e numa fila, de 25 a 3 200 elementos |
 
 ### Calendário
 
 | Fase | Datas | Porta | Estado |
 | --- | --- | --- | --- |
-| 1 · Fundações | 5–18 Out | Compila em todas as máquinas e os testes dos TAD passam | Concluída |
-| 2 · Motor do parque | 19 Out–1 Nov | Entrada e saída por teste; o plano de manobras repõe a ordem | Concluída |
-| 3 · Interface, persistência e medições | 26 Out–9 Nov | MVP ponta a ponta e CSV com as políticas comparadas | MVP concluído a 27 Out; a fechar o resto do código |
-| 4 · Relatório e defesa | 9–16 Nov | Relatório entregue e demonstração ensaiada noutra máquina | Começa quando o código fechar |
+| 1 · Fundações | 5 a 18 Out | Compila em todas as máquinas e os testes dos TAD passam | Concluída |
+| 2 · Motor do parque | 19 Out a 1 Nov | Entrada e saída por teste; o plano de manobras repõe a ordem | Concluída |
+| 3 · Interface, persistência e medições | 26 Out a 9 Nov | MVP ponta a ponta e CSV com as políticas comparadas | Concluída: MVP a 27 Out, código fechado a 27 Out |
+| 4 · Relatório e defesa | 9 a 16 Nov | Relatório entregue e demonstração ensaiada noutra máquina | A começar |
 
-A data de entrega aponta para as Aulas 31–32 e ainda está por confirmar com o docente.
+A data de entrega aponta para as Aulas 31 e 32 e ainda está por confirmar com o docente.
 
 ---
 

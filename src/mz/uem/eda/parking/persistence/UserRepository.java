@@ -39,7 +39,7 @@ public class UserRepository {
      * @throws SQLException se a leitura falhar
      */
     public Queue<User> loadAll() throws SQLException {
-        String sql = "SELECT id, username, password_hash, salt, iterations, role "
+        String sql = "SELECT id, username, password_hash, salt, iterations, role, failed_attempts, locked_until "
                 + "FROM users WHERE active = TRUE ORDER BY id";
         Queue<User> users = new LinkedQueue<>();
         try (Connection c = connections.open();
@@ -49,6 +49,7 @@ public class UserRepository {
                 User user = new User(rs.getString("username"), rs.getString("password_hash"),
                         rs.getString("salt"), rs.getInt("iterations"), User.Role.valueOf(rs.getString("role")));
                 user.setId(rs.getLong("id"));
+                user.restoreLock(rs.getInt("failed_attempts"), Sql.getTime(rs, "locked_until"));
                 users.enqueue(user);
             }
         }
@@ -107,6 +108,25 @@ public class UserRepository {
      * @param user o utilizador já gravado
      * @throws SQLException se a gravação falhar
      */
+    /**
+     * Grava o estado do bloqueio (RF03): as tentativas erradas seguidas e até
+     * quando a conta está bloqueada.
+     *
+     * @param user o utilizador, já gravado
+     * @throws IllegalStateException se o utilizador ainda não tiver sido gravado
+     * @throws SQLException se a gravação falhar
+     */
+    public void updateLockState(User user) throws SQLException {
+        requireStored(user);
+        String sql = "UPDATE users SET failed_attempts = ?, locked_until = ? WHERE id = ?";
+        try (Connection c = connections.open(); PreparedStatement st = c.prepareStatement(sql)) {
+            st.setInt(1, user.getFailedAttempts());
+            Sql.setTime(st, 2, user.getLockedUntil());
+            st.setLong(3, user.getId());
+            st.executeUpdate();
+        }
+    }
+
     public void deactivate(User user) throws SQLException {
         requireStored(user);
         try (Connection c = connections.open();

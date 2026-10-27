@@ -9,6 +9,8 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.text.MessageFormat;
+import java.time.YearMonth;
+import java.time.format.DateTimeFormatter;
 import java.util.Locale;
 import java.util.MissingResourceException;
 import java.util.PropertyResourceBundle;
@@ -30,7 +32,8 @@ import java.util.ResourceBundle;
 public final class Texts {
 
     private static final String FILE = "strings_pt.properties";
-    private static final Locale PORTUGUESE = new Locale("pt", "MZ");
+    private static final Locale PORTUGUESE = Locale.forLanguageTag("pt-MZ");
+    private static final DateTimeFormatter MONTH = DateTimeFormatter.ofPattern("MMMM 'de' yyyy", PORTUGUESE);
 
     private static ResourceBundle bundle;
 
@@ -108,6 +111,16 @@ public final class Texts {
             return format("time.minutes", String.valueOf(minutes));
         }
         return format("time.hours", String.valueOf(minutes / 60), String.format("%02d", minutes % 60));
+    }
+
+    /**
+     * Escreve um mês por extenso, por exemplo {@code "outubro de 2026"}.
+     *
+     * @param month o mês
+     * @return o mês formatado
+     */
+    public static String month(YearMonth month) {
+        return month.format(MONTH);
     }
 
     /** Carrega o ficheiro na primeira vez que é preciso. */

@@ -1,17 +1,23 @@
 package mz.uem.eda.parking.ui.dialogs;
 
+import java.awt.BorderLayout;
 import java.awt.Cursor;
 import java.awt.Dialog;
+import java.awt.GridLayout;
 import java.awt.Window;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.sql.SQLException;
+import java.time.DayOfWeek;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.temporal.TemporalAdjusters;
 
 import javax.swing.JButton;
 import javax.swing.JDialog;
 import javax.swing.JLabel;
 import javax.swing.JOptionPane;
+import javax.swing.JPanel;
 import javax.swing.JSpinner;
 import javax.swing.JTextField;
 import javax.swing.SpinnerNumberModel;
@@ -23,16 +29,25 @@ import javax.swing.event.DocumentListener;
 import mz.uem.eda.parking.model.Tariff;
 import mz.uem.eda.parking.service.ParkingDesk;
 import mz.uem.eda.parking.ui.Texts;
+import mz.uem.eda.parking.ui.theme.Theme;
 
 /**
- * Muda a tarifa (RF13), só para o administrador. Os quatro valores começam
- * com os da tarifa em vigor: tolerância gratuita, fracção mínima de
- * cobrança, valor por hora e tecto diário.
+ * Muda a tarifa (RF13, RF16, RF17), só para o administrador. Os valores
+ * começam com os da tarifa em vigor e estão em duas colunas:
+ * <ul>
+ * <li><b>Estadia</b>: tolerância gratuita, fracção mínima de cobrança,
+ * valor por hora e tecto diário;</li>
+ * <li><b>Noite, fim-de-semana, multa e avença</b>: valor por hora das 20h às
+ * 7h, desconto ao sábado e ao domingo, multa por talão perdido e valor da
+ * avença mensal.</li>
+ * </ul>
  *
  * <p>Por baixo, uma tabela de exemplos mostra quanto pagam algumas estadias
- * com a tarifa actual e com a nova, e muda enquanto se escreve. As contas
- * são da {@link ParkingDesk#priceWith}, com as mesmas regras da cobrança
- * verdadeira; o ecrã não calcula preços.
+ * com a tarifa actual e com a nova, e muda enquanto se escreve. Cada
+ * exemplo começa num dia e numa hora certos (uma terça de manhã, uma terça
+ * à noite, um sábado), para se ver o efeito da noite e do fim-de-semana. As
+ * contas são da {@link ParkingDesk#priceWith}, com as mesmas regras da
+ * cobrança verdadeira; o ecrã não calcula preços.
  *
  * <p>Os valores escrevem-se em meticais ("60" ou "60,50") e guardam-se em
  * centavos, num {@code long}, como em todo o programa (ver {@link Tariff}).
@@ -43,8 +58,11 @@ import mz.uem.eda.parking.ui.Texts;
  */
 public final class TariffDialog {
 
-    /** As estadias dos exemplos, em minutos: 10 min, 45 min, 1 h 10, 3 h, 10 h e 26 h. */
-    private static final int[] EXAMPLES = { 10, 45, 70, 180, 600, 1560 };
+    /** Os exemplos: dia da semana, hora de entrada e duração em minutos. */
+    private static final DayOfWeek[] EXAMPLE_DAYS = { DayOfWeek.TUESDAY, DayOfWeek.TUESDAY, DayOfWeek.TUESDAY,
+        DayOfWeek.TUESDAY, DayOfWeek.SATURDAY, DayOfWeek.TUESDAY, DayOfWeek.TUESDAY };
+    private static final int[] EXAMPLE_HOURS = { 10, 10, 10, 21, 10, 8, 10 };
+    private static final int[] EXAMPLE_MINUTES = { 10, 45, 180, 180, 180, 600, 1560 };
 
     private final JDialog dialog;
     private final ParkingDesk desk;
@@ -53,6 +71,10 @@ public final class TariffDialog {
     private final JSpinner fractionMinutes;
     private final JTextField hourly = new JTextField(10);
     private final JTextField dailyCap = new JTextField(10);
+    private final JTextField nightRate = new JTextField(10);
+    private final JSpinner weekendDiscount;
+    private final JTextField lostTicket = new JTextField(10);
+    private final JTextField monthlyPass = new JTextField(10);
     private final JLabel examples = new JLabel();
     private final JLabel message = new JLabel();
     private boolean done;
@@ -64,8 +86,12 @@ public final class TariffDialog {
 
         freeMinutes = new JSpinner(new SpinnerNumberModel(active.getFreeMinutes(), 0, 240, 5));
         fractionMinutes = new JSpinner(new SpinnerNumberModel(active.getFractionMinutes(), 1, 60, 1));
+        weekendDiscount = new JSpinner(new SpinnerNumberModel(active.getWeekendDiscountPercent(), 0, 100, 5));
         hourly.setText(Texts.amount(active.getHourlyRateCents()));
         dailyCap.setText(Texts.amount(active.getDailyCapCents()));
+        nightRate.setText(Texts.amount(active.getNightRateCents()));
+        lostTicket.setText(Texts.amount(active.getLostTicketCents()));
+        monthlyPass.setText(Texts.amount(active.getMonthlyPassCents()));
 
         ActionListener save = new ActionListener() {
             @Override
@@ -78,6 +104,7 @@ public final class TariffDialog {
         // Enter dentro de um campo numérico também grava, como nos outros campos.
         ((JSpinner.DefaultEditor) freeMinutes.getEditor()).getTextField().addActionListener(save);
         ((JSpinner.DefaultEditor) fractionMinutes.getEditor()).getTextField().addActionListener(save);
+        ((JSpinner.DefaultEditor) weekendDiscount.getEditor()).getTextField().addActionListener(save);
         JButton cancel = new JButton(Texts.get("dialog.cancel"));
         cancel.addActionListener(new ActionListener() {
             @Override
@@ -95,6 +122,7 @@ public final class TariffDialog {
         };
         freeMinutes.addChangeListener(spinnerChanged);
         fractionMinutes.addChangeListener(spinnerChanged);
+        weekendDiscount.addChangeListener(spinnerChanged);
         DocumentListener textChanged = new DocumentListener() {
             @Override
             public void insertUpdate(DocumentEvent e) {
@@ -111,20 +139,43 @@ public final class TariffDialog {
                 updateExamples();
             }
         };
-        hourly.getDocument().addDocumentListener(textChanged);
-        dailyCap.getDocument().addDocumentListener(textChanged);
+        for (JTextField field : moneyFields()) {
+            field.getDocument().addDocumentListener(textChanged);
+        }
 
-        FormPanel form = new FormPanel();
-        form.addText(Texts.get("tariff.intro"));
-        form.addField(Texts.get("tariff.free"), freeMinutes);
-        form.addField(Texts.get("tariff.fraction"), fractionMinutes);
-        form.addField(Texts.get("tariff.hourly"), hourly);
-        form.addField(Texts.get("tariff.cap"), dailyCap);
-        form.addField(Texts.get("tariff.examples"), examples);
-        form.addMessage(message);
-        form.addButtons(cancel, submit);
+        FormPanel base = new FormPanel();
+        base.getPanel().setBorder(null);
+        base.addText(Texts.get("tariff.section.base"));
+        base.addField(Texts.get("tariff.free"), freeMinutes);
+        base.addField(Texts.get("tariff.fraction"), fractionMinutes);
+        base.addField(Texts.get("tariff.hourly"), hourly);
+        base.addField(Texts.get("tariff.cap"), dailyCap);
 
-        dialog.setContentPane(form.getPanel());
+        FormPanel periods = new FormPanel();
+        periods.getPanel().setBorder(null);
+        periods.addText(Texts.get("tariff.section.periods"));
+        periods.addField(Texts.get("tariff.night"), nightRate);
+        periods.addField(Texts.get("tariff.weekend"), weekendDiscount);
+        periods.addField(Texts.get("tariff.lost"), lostTicket);
+        periods.addField(Texts.get("tariff.pass"), monthlyPass);
+
+        JPanel columns = new JPanel(new GridLayout(1, 2, Theme.PADDING * 2, 0));
+        columns.add(base.getPanel());
+        columns.add(periods.getPanel());
+
+        FormPanel bottom = new FormPanel();
+        bottom.getPanel().setBorder(null);
+        bottom.addField(Texts.get("tariff.examples"), examples);
+        bottom.addMessage(message);
+        bottom.addButtons(cancel, submit);
+
+        JPanel content = new JPanel(new BorderLayout(0, Theme.PADDING));
+        content.setBorder(Theme.padding());
+        content.add(new JLabel(Texts.get("tariff.intro")), BorderLayout.NORTH);
+        content.add(columns, BorderLayout.CENTER);
+        content.add(bottom.getPanel(), BorderLayout.SOUTH);
+
+        dialog.setContentPane(content);
         dialog.getRootPane().setDefaultButton(submit);
         dialog.setDefaultCloseOperation(JDialog.DISPOSE_ON_CLOSE);
         dialog.setResizable(false);
@@ -148,21 +199,25 @@ public final class TariffDialog {
         return screen.done;
     }
 
+    /** Os campos com valores em meticais, pela ordem do ecrã. */
+    private JTextField[] moneyFields() {
+        return new JTextField[] { hourly, dailyCap, nightRate, lostTicket, monthlyPass };
+    }
+
     private void submit() {
-        long hourlyCents = cents(hourly.getText());
-        long capCents = cents(dailyCap.getText());
-        if (hourlyCents < 0 || capCents < 0) {
-            message.setText(Texts.get("tariff.error.money"));
-            (hourlyCents < 0 ? hourly : dailyCap).requestFocusInWindow();
-            return;
+        for (JTextField field : moneyFields()) {
+            if (cents(field.getText()) < 0) {
+                message.setText(Texts.get("tariff.error.money"));
+                field.requestFocusInWindow();
+                return;
+            }
         }
-        if (capCents < hourlyCents) {
+        if (cents(dailyCap.getText()) < cents(hourly.getText())) {
             message.setText(Texts.get("tariff.error.cap"));
             dailyCap.requestFocusInWindow();
             return;
         }
-        Tariff tariff = new Tariff((Integer) freeMinutes.getValue(), (Integer) fractionMinutes.getValue(),
-                hourlyCents, capCents);
+        Tariff tariff = typedTariff();
         if (sameAs(tariff, active)) {
             message.setText(Texts.get("tariff.error.same"));
             return;
@@ -180,23 +235,36 @@ public final class TariffDialog {
         done = true;
         dialog.dispose();
         JOptionPane.showMessageDialog(dialog.getOwner(),
-                Texts.format("tariff.done", Texts.money(hourlyCents), Texts.money(capCents)),
+                Texts.format("tariff.done", Texts.money(tariff.getHourlyRateCents()),
+                        Texts.money(tariff.getDailyCapCents())),
                 Texts.get("tariff.title"), JOptionPane.INFORMATION_MESSAGE);
     }
 
     /**
      * Reescreve a tabela de exemplos: cada estadia com a tarifa actual e
-     * com a que está escrita. Enquanto um valor estiver mal escrito, a
-     * coluna da nova mostra um traço.
+     * com a que está escrita, e no fim a multa e a avença. Enquanto um valor
+     * estiver mal escrito, a coluna da nova mostra um traço.
      */
     private void updateExamples() {
         Tariff typed = typedTariff();
+        LocalDate today = LocalDate.now();
         StringBuilder html = new StringBuilder(Texts.get("tariff.examples.head"));
-        for (int minutes : EXAMPLES) {
-            String now = Texts.money(desk.priceWith(active, minutes));
-            String next = typed == null ? "—" : Texts.money(desk.priceWith(typed, minutes));
-            html.append(Texts.format("tariff.examples.row", Texts.duration(minutes), now, next));
+        for (int i = 0; i < EXAMPLE_MINUTES.length; i++) {
+            LocalDate day = today.with(TemporalAdjusters.nextOrSame(EXAMPLE_DAYS[i]));
+            LocalDateTime entry = day.atTime(EXAMPLE_HOURS[i], 0);
+            int minutes = EXAMPLE_MINUTES[i];
+            String label = Texts.format("tariff.example.stay", Texts.duration(minutes),
+                    Texts.get("day." + EXAMPLE_DAYS[i].name()), String.valueOf(EXAMPLE_HOURS[i]), "00");
+            String now = Texts.money(desk.priceWith(active, entry, minutes));
+            String next = typed == null ? "—" : Texts.money(desk.priceWith(typed, entry, minutes));
+            html.append(Texts.format("tariff.examples.row", label, now, next));
         }
+        html.append(Texts.format("tariff.examples.row", Texts.get("tariff.example.lost"),
+                Texts.money(active.getLostTicketCents()),
+                typed == null ? "—" : Texts.money(typed.getLostTicketCents())));
+        html.append(Texts.format("tariff.examples.row", Texts.get("tariff.example.pass"),
+                Texts.money(active.getMonthlyPassCents()),
+                typed == null ? "—" : Texts.money(typed.getMonthlyPassCents())));
         html.append(Texts.get("tariff.examples.tail"));
         examples.setText(html.toString());
         message.setText(" ");
@@ -206,18 +274,25 @@ public final class TariffDialog {
     private Tariff typedTariff() {
         long hourlyCents = cents(hourly.getText());
         long capCents = cents(dailyCap.getText());
-        if (hourlyCents < 0 || capCents < hourlyCents) {
+        long nightCents = cents(nightRate.getText());
+        long lostCents = cents(lostTicket.getText());
+        long passCents = cents(monthlyPass.getText());
+        if (hourlyCents < 0 || capCents < hourlyCents || nightCents < 0 || lostCents < 0 || passCents < 0) {
             return null;
         }
         return new Tariff((Integer) freeMinutes.getValue(), (Integer) fractionMinutes.getValue(),
-                hourlyCents, capCents);
+                hourlyCents, capCents, nightCents, (Integer) weekendDiscount.getValue(), lostCents, passCents);
     }
 
     private static boolean sameAs(Tariff a, Tariff b) {
         return a.getFreeMinutes() == b.getFreeMinutes()
                 && a.getFractionMinutes() == b.getFractionMinutes()
                 && a.getHourlyRateCents() == b.getHourlyRateCents()
-                && a.getDailyCapCents() == b.getDailyCapCents();
+                && a.getDailyCapCents() == b.getDailyCapCents()
+                && a.getNightRateCents() == b.getNightRateCents()
+                && a.getWeekendDiscountPercent() == b.getWeekendDiscountPercent()
+                && a.getLostTicketCents() == b.getLostTicketCents()
+                && a.getMonthlyPassCents() == b.getMonthlyPassCents();
     }
 
     /**

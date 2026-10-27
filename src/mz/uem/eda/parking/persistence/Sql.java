@@ -38,6 +38,20 @@ final class Sql {
         return rs.getObject(column, LocalDateTime.class);
     }
 
+    /** Grava um dia, ou {@code NULL}. */
+    static void setDate(PreparedStatement st, int index, java.time.LocalDate day) throws SQLException {
+        if (day == null) {
+            st.setNull(index, Types.DATE);
+        } else {
+            st.setObject(index, day);
+        }
+    }
+
+    /** Lê um dia, ou {@code null} se a coluna estiver vazia. */
+    static java.time.LocalDate getDate(ResultSet rs, String column) throws SQLException {
+        return rs.getObject(column, java.time.LocalDate.class);
+    }
+
     /** O id gerado pelo último {@code INSERT} com {@code RETURN_GENERATED_KEYS}. */
     static long generatedKey(Statement st) throws SQLException {
         try (ResultSet keys = st.getGeneratedKeys()) {

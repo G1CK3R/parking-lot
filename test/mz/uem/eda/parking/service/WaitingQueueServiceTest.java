@@ -158,6 +158,36 @@ class WaitingQueueServiceTest {
         assertEquals(2, waiting.normalSize());
     }
 
+    // ---- cliente preferencial marcado ao balcão e desfazer ---------------
+
+    @Test
+    void theDeskCanMarkACustomerAsPreferential() {
+        WaitingQueueService waiting = service(new StrictPriority());
+
+        assertTrue(waiting.join(car("AAA001MC", null), 60, T0, true).isPreferential());
+        assertFalse(waiting.join(car("AAA002MC", VIP), 60, T0, false).isPreferential());
+        assertEquals(1, waiting.preferentialSize());
+        assertEquals(1, waiting.normalSize());
+    }
+
+    @Test
+    void removeTakesACarOutOfTheMiddleKeepingTheOrder() {
+        WaitingQueueService waiting = service(new StrictPriority());
+        waiting.join(car("AAA001MC", null), 60, T0);
+        waiting.join(car("AAA002MC", null), 60, T0);
+        waiting.join(car("AAA003MC", null), 60, T0);
+
+        assertTrue(waiting.remove(car("AAA002MC", null)));
+        assertFalse(waiting.remove(car("AAA002MC", null)));
+        assertFalse(waiting.isWaiting(car("AAA002MC", null)));
+
+        StringBuilder order = new StringBuilder();
+        for (WaitingCar car : waiting.normalContents()) {
+            order.append(car.getVehicle().getPlate()).append(' ');
+        }
+        assertEquals("AAA001MC AAA003MC ", order.toString());
+    }
+
     // ---- auxiliares -----------------------------------------------------
 
     private WaitingQueueService service(ServicePolicy policy) {

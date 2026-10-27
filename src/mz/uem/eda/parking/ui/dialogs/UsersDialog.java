@@ -9,6 +9,8 @@ import java.awt.Window;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.sql.SQLException;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 
 import javax.swing.JButton;
 import javax.swing.JDialog;
@@ -29,11 +31,14 @@ import mz.uem.eda.parking.ui.theme.Theme;
 
 /**
  * O ecrã de utilizadores, só para o administrador (RF22): a lista de quem
- * pode entrar no programa, pela ordem de criação, e três acções sobre ela.
+ * pode entrar no programa, pela ordem de criação, com o estado de cada
+ * conta, e quatro acções sobre ela.
  * <ul>
  * <li><b>Novo utilizador</b>, com o {@link NewUserDialog};</li>
  * <li><b>Nova palavra-passe</b>, para quem se esqueceu da sua, com o
- * {@link PasswordDialog};</li>
+ * {@link PasswordDialog}; também desbloqueia a conta;</li>
+ * <li><b>Desbloquear</b>, para uma conta bloqueada por cinco palavras-passe
+ * erradas seguidas (RF03), sem esperar os 15 minutos;</li>
  * <li><b>Retirar</b>, depois de confirmar. Na base a conta fica
  * desactivada, não apagada, porque os pagamentos que cobrou continuam a
  * apontar para ela.</li>
@@ -46,14 +51,18 @@ import mz.uem.eda.parking.ui.theme.Theme;
  */
 public final class UsersDialog {
 
+    private static final DateTimeFormatter TIME = DateTimeFormatter.ofPattern("HH:mm");
+
     private final JDialog dialog;
     private final ParkingDesk desk;
     private final DefaultTableModel model = new DefaultTableModel(
-            new Object[] { Texts.get("users.column.name"), Texts.get("users.column.role") }, 0);
+            new Object[] { Texts.get("users.column.name"), Texts.get("users.column.role"),
+                Texts.get("users.column.state") }, 0);
     private final JTable table = new JTable(model);
     private final JLabel count = new JLabel();
     private final JButton reset = new JButton(Texts.get("users.reset"));
     private final JButton remove = new JButton(Texts.get("users.remove"));
+    private final JButton unlock = new JButton(Texts.get("users.unlock"));
 
     private UsersDialog(Window owner, ParkingDesk desk) {
         this.desk = desk;
@@ -65,6 +74,9 @@ public final class UsersDialog {
         table.setRowHeight(28);
         table.setFillsViewportHeight(true);
         table.getTableHeader().setReorderingAllowed(false);
+        table.getColumnModel().getColumn(0).setPreferredWidth(110);
+        table.getColumnModel().getColumn(1).setPreferredWidth(230);
+        table.getColumnModel().getColumn(2).setPreferredWidth(160);
         table.getSelectionModel().addListSelectionListener(new ListSelectionListener() {
             @Override
             public void valueChanged(ListSelectionEvent e) {
@@ -91,6 +103,12 @@ public final class UsersDialog {
                 removeUser();
             }
         });
+        unlock.addActionListener(new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                unlockUser();
+            }
+        });
         JButton close = new JButton(Texts.get("users.close"));
         close.addActionListener(new ActionListener() {
             @Override
@@ -102,6 +120,7 @@ public final class UsersDialog {
         JPanel actions = new JPanel(new GridLayout(0, 1, 0, Theme.GAP));
         actions.add(add);
         actions.add(reset);
+        actions.add(unlock);
         actions.add(remove);
         JPanel side = new JPanel(new BorderLayout());
         side.add(actions, BorderLayout.NORTH);
@@ -124,7 +143,7 @@ public final class UsersDialog {
         dialog.setContentPane(content);
         dialog.getRootPane().setDefaultButton(close);
         dialog.setDefaultCloseOperation(JDialog.DISPOSE_ON_CLOSE);
-        dialog.setSize(new Dimension(640, 420));
+        dialog.setSize(new Dimension(760, 440));
         dialog.setLocationRelativeTo(owner);
         fill(null);
     }
@@ -147,6 +166,7 @@ public final class UsersDialog {
     private void fill(String select) {
         model.setRowCount(0);
         User me = desk.getCurrentUser();
+        LocalDateTime now = LocalDateTime.now();
         int total = 0;
         int selectedRow = -1;
         for (User user : desk.users()) {
@@ -154,7 +174,10 @@ public final class UsersDialog {
             if (user.equals(me)) {
                 role = Texts.format("users.you", role);
             }
-            model.addRow(new Object[] { user.getUsername(), role });
+            String state = user.isLockedAt(now)
+                    ? Texts.format("users.state.locked", user.getLockedUntil().format(TIME))
+                    : Texts.get("users.state.active");
+            model.addRow(new Object[] { user.getUsername(), role, state });
             if (user.getUsername().equals(select)) {
                 selectedRow = total;
             }
@@ -167,11 +190,15 @@ public final class UsersDialog {
         updateButtons();
     }
 
-    /** Nova palavra-passe e Retirar só com alguém seleccionado; Retirar nunca para o próprio. */
+    /**
+     * Nova palavra-passe e Retirar só com alguém seleccionado; Retirar nunca
+     * para o próprio; Desbloquear só para uma conta bloqueada.
+     */
     private void updateButtons() {
         String selected = selectedUsername();
         boolean me = selected != null && selected.equals(desk.getCurrentUser().getUsername());
         reset.setEnabled(selected != null);
+        unlock.setEnabled(selected != null && desk.lockedUntil(selected, LocalDateTime.now()) != null);
         remove.setEnabled(selected != null && !me);
         remove.setToolTipText(me ? Texts.get("users.remove.self") : null);
     }
@@ -200,7 +227,27 @@ public final class UsersDialog {
         String selected = selectedUsername();
         if (selected != null) {
             PasswordDialog.askReset(dialog, desk, selected);
+            fill(selected);
         }
+    }
+
+    private void unlockUser() {
+        String selected = selectedUsername();
+        if (selected == null) {
+            return;
+        }
+        try {
+            if (desk.unlockUser(selected)) {
+                JOptionPane.showMessageDialog(dialog, Texts.format("users.unlocked", selected),
+                        Texts.get("users.unlock"), JOptionPane.INFORMATION_MESSAGE);
+            } else {
+                JOptionPane.showMessageDialog(dialog, Texts.format("users.error.gone", selected),
+                        Texts.get("users.unlock"), JOptionPane.WARNING_MESSAGE);
+            }
+        } catch (SQLException e) {
+            Errors.saveFailed(dialog, e);
+        }
+        fill(selected);
     }
 
     private void removeUser() {

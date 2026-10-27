@@ -6,9 +6,13 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.YearMonth;
 
 import org.junit.jupiter.api.Test;
 
+import mz.uem.eda.parking.model.Charge;
+import mz.uem.eda.parking.model.Lane;
+import mz.uem.eda.parking.model.MonthlyPass;
 import mz.uem.eda.parking.model.ParkingSession;
 import mz.uem.eda.parking.model.Payment;
 import mz.uem.eda.parking.model.StayClass;
@@ -18,7 +22,7 @@ import mz.uem.eda.parking.model.Vehicle;
 import mz.uem.eda.parking.structures.LinkedQueue;
 import mz.uem.eda.parking.structures.Queue;
 
-/** Os relatórios de receita e o fecho de caixa, sobre um histórico feito à mão. */
+/** Os relatórios de receita, o fecho de caixa e o histórico, sobre dados feitos à mão. */
 class ReportServiceTest {
 
     private static final LocalDateTime DAY1 = LocalDateTime.of(2026, 10, 26, 0, 0);
@@ -119,8 +123,89 @@ class ReportServiceTest {
         assertEquals("ana", report.getOperator());
         assertEquals(3, report.getCount());
         assertEquals(7500 + 40000 + 4500, report.getTotalCents());
-        assertEquals("4 5 7", tickets(close.paymentsByAmount()));
+        assertEquals("4 5 7", charges(close.chargesByAmount()));
         assertTrue(close.getComparisons() > 0);
+    }
+
+    // ------------------------------------------------------------------
+    // Avenças na receita e no fecho de caixa
+    // ------------------------------------------------------------------
+
+    /**
+     * Duas avenças: uma vendida pela ana no dia 1 (dentro do período) e uma
+     * vendida pelo rui no dia 3 (fora do período dia 1 a dia 3).
+     */
+    private static Queue<MonthlyPass> passes() {
+        Queue<MonthlyPass> passes = new LinkedQueue<>();
+        passes.enqueue(new MonthlyPass("Maria", null, "BBB100MC", YearMonth.of(2026, 11), 350000,
+                Payment.Method.CASH, DAY1.plusHours(11), ANA));
+        passes.enqueue(new MonthlyPass("João", "84 000 0000", "CCC200MC", YearMonth.of(2026, 11), 350000,
+                Payment.Method.MPESA, DAY3.plusHours(8), RUI));
+        return passes;
+    }
+
+    @Test
+    void revenueAddsThePassesSoldInThePeriod() {
+        RevenueReport report = ReportService.revenue(history(), passes(), DAY1, DAY3, null);
+
+        assertEquals(5, report.getCount());
+        assertEquals(4, report.getPaymentCount());
+        assertEquals(1, report.getPassCount());
+        assertEquals(350000, report.getPassTotalCents());
+        assertEquals(7500 + 12000 + 6000 + 40000 + 350000, report.getTotalCents());
+        // As avenças não entram nas listas dos pagamentos de estadias.
+        assertEquals("2 5 9 4", tickets(report.paymentsByTime()));
+
+        StringBuilder days = new StringBuilder();
+        for (RevenueLine<LocalDate> line : report.byDay()) {
+            days.append(line.getKey().getDayOfMonth()).append('=').append(line.getCount()).append(' ');
+        }
+        assertEquals("26=3 27=2 ", days.toString());
+
+        StringBuilder operators = new StringBuilder();
+        for (RevenueLine<String> line : report.byOperator()) {
+            operators.append(line.getKey()).append('=').append(line.getTotalCents()).append(' ');
+        }
+        assertEquals("ana=397500 rui=18000 ", operators.toString());
+    }
+
+    @Test
+    void cashCloseHasTheOperatorsPassesToo() {
+        CashClose close = ReportService.cashClose(history(), passes(), ANA, DAY1, DAY3.plusDays(1));
+
+        assertEquals(4, close.getReport().getCount());
+        assertEquals(7500 + 40000 + 4500 + 350000, close.getReport().getTotalCents());
+        assertEquals("BBB100MC 4 5 7", charges(close.chargesByAmount()));
+    }
+
+    // ------------------------------------------------------------------
+    // Histórico das estadias
+    // ------------------------------------------------------------------
+
+    @Test
+    void historyJoinsParkedCarsAndPaymentsByEntryTime() {
+        Lane lane = Lane.parking("J01", 3, StayClass.FULL_DAY);
+        lane.asStack().push(new ParkingSession(11, new Vehicle("DDD300MC", Vehicle.Type.CAR, null), "J01",
+                StayClass.FULL_DAY, 60, DAY1.plusHours(9).plusMinutes(30)));
+        Queue<Lane> lanes = new LinkedQueue<>();
+        lanes.enqueue(lane);
+
+        Queue<HistoryEntry> all = ReportService.history(history(), lanes, DAY1, DAY3, "", null, true, true);
+        // Cada pagamento entrou uma hora antes: 2 às 8h, 5 às 9h, o 11 (no parque) às 9h30, e 9 e 4 no dia 2.
+        assertEquals("2 5 11 9 4", entries(all));
+
+        Queue<HistoryEntry> onlyParked = ReportService.history(history(), lanes, DAY1, DAY3, "", null, true,
+                false);
+        assertEquals("11", entries(onlyParked));
+        assertTrue(onlyParked.peek().isInPark());
+
+        Queue<HistoryEntry> byPlate = ReportService.history(history(), lanes, DAY1, DAY3, "aaa 9", null, true,
+                true);
+        assertEquals("9", entries(byPlate));
+
+        // Com operador, só as saídas que ele cobrou; os carros no parque ainda não têm operador.
+        Queue<HistoryEntry> ofRui = ReportService.history(history(), lanes, DAY1, DAY3, "", "rui", true, true);
+        assertEquals("2 9", entries(ofRui));
     }
 
     @Test
@@ -147,6 +232,33 @@ class ReportServiceTest {
                 "J01", StayClass.FULL_DAY, 60, paidAt.minusHours(1));
         session.close(paidAt, 0);
         return new Payment(session, TARIFF, cents, method, paidAt, operator);
+    }
+
+    /** Os talões dos pagamentos e as matrículas das avenças, pela ordem dada. */
+    private static String charges(Iterable<Charge> charges) {
+        StringBuilder text = new StringBuilder();
+        for (Charge charge : charges) {
+            if (text.length() > 0) {
+                text.append(' ');
+            }
+            if (charge instanceof Payment) {
+                text.append(((Payment) charge).getSession().getTicketNumber());
+            } else {
+                text.append(charge.getPlate());
+            }
+        }
+        return text.toString();
+    }
+
+    private static String entries(Iterable<HistoryEntry> entries) {
+        StringBuilder text = new StringBuilder();
+        for (HistoryEntry entry : entries) {
+            if (text.length() > 0) {
+                text.append(' ');
+            }
+            text.append(entry.getSession().getTicketNumber());
+        }
+        return text.toString();
     }
 
     private static String tickets(Iterable<Payment> payments) {

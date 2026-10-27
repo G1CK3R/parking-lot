@@ -22,7 +22,9 @@ import java.util.Objects;
  *
  * <p>Imutável, excepto o estado, que só avança uma vez (de {@code ACTIVE}
  * para {@code CHECKED_IN}, {@code EXPIRED} ou {@code CANCELLED}), e o
- * identificador da base de dados.
+ * identificador da base de dados. A única excepção é desfazer um
+ * cancelamento ({@link #reactivate()}), que volta de {@code CANCELLED} para
+ * {@code ACTIVE}.
  */
 public class Reservation {
 
@@ -159,6 +161,19 @@ public class Reservation {
     public void cancel() {
         requireActive();
         status = Status.CANCELLED;
+    }
+
+    /**
+     * Desfaz um cancelamento: a reserva volta a estar activa, com a mesma
+     * hora de expiração. É a única vez em que o estado volta atrás.
+     *
+     * @throws IllegalStateException se a reserva não estiver cancelada
+     */
+    public void reactivate() {
+        if (status != Status.CANCELLED) {
+            throw new IllegalStateException("só se reactiva uma reserva cancelada: " + this);
+        }
+        status = Status.ACTIVE;
     }
 
     /**

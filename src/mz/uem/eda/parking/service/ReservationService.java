@@ -24,7 +24,10 @@ import mz.uem.eda.parking.structures.Queue;
  *
  * <p>O check-in e o cancelamento acontecem por qualquer ordem, por isso não
  * se tira a reserva do meio da fila: marca-se como {@code CHECKED_IN} ou
- * {@code CANCELLED} e ela sai quando chegar à frente. Um contador guarda quantas estão activas, para não percorrer a
+ * {@code CANCELLED} e ela sai quando chegar à frente. Uma cancelada só sai
+ * quando passa a sua hora de expiração, para o cancelamento se poder
+ * desfazer até lá ({@link #reactivate}); como as de trás expiram depois
+ * dela, esperar por ela não atrasa nenhuma expiração. Um contador guarda quantas estão activas, para não percorrer a
  * fila a cada consulta.
  *
  * <p><b>Lugares reservados contam como ocupados</b> para quem chega sem
@@ -154,6 +157,42 @@ public class ReservationService {
     }
 
     /**
+     * Desfaz o cancelamento de uma reserva: volta a guardar o lugar, até à
+     * mesma hora de expiração. Só é possível enquanto essa hora não passar e
+     * se ainda houver um lugar livre sem reserva.
+     *
+     * @param reservation a reserva cancelada
+     * @param now a hora
+     * @return {@code true} se a reserva voltou a estar activa; {@code false}
+     *         se já passou a hora, se a reserva já não está na fila, ou se não
+     *         há lugar livre
+     * @complexity O(r + B)
+     */
+    public boolean reactivate(Reservation reservation, LocalDateTime now) {
+        Objects.requireNonNull(reservation, "reservation não pode ser null");
+        Objects.requireNonNull(now, "now não pode ser null");
+        expire(now);
+        if (reservation.getStatus() != Reservation.Status.CANCELLED || reservation.isExpiredAt(now)
+                || !contains(reservation) || find(reservation.getPlate()) != null
+                || isParked(reservation.getPlate()) || freePlaces() - activeCount <= 0) {
+            return false;
+        }
+        reservation.reactivate();
+        activeCount++;
+        return true;
+    }
+
+    /** Diz se esta reserva (o mesmo objecto) ainda está na fila. O(r). */
+    private boolean contains(Reservation reservation) {
+        for (Reservation r : reservations) {
+            if (r == reservation) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
      * Marca como expiradas as reservas cuja tolerância já acabou e tira da
      * frente da fila as que já fizeram check-in (RF12). Pára na primeira
      * reserva activa ainda dentro da tolerância: todas as de trás expiram
@@ -169,6 +208,10 @@ public class ReservationService {
         int expired = 0;
         while (!reservations.isEmpty()) {
             Reservation front = reservations.peek();
+            if (front.getStatus() == Reservation.Status.CANCELLED && !front.isExpiredAt(now)) {
+                // Fica até à sua hora, para o cancelamento se poder desfazer.
+                break;
+            }
             if (!front.isActive()) {
                 reservations.dequeue();
             } else if (front.isExpiredAt(now)) {

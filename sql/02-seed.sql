@@ -42,9 +42,13 @@ INSERT INTO lanes (code, capacity, stay_class, is_buffer) VALUES
     ('M', 10, NULL, TRUE);
 
 -- Tarifa provisória (RN01 a RN03 por confirmar): tolerância de 15 min,
--- fracções de 15 min, 60 MZN por hora, tecto de 400 MZN por dia.
-INSERT INTO tariffs (free_minutes, fraction_minutes, hourly_rate_cents, daily_cap_cents, active, created_at)
-VALUES (15, 15, 6000, 40000, TRUE, NOW());
+-- fracções de 15 min, 60 MZN por hora de dia e 30 MZN por hora de noite
+-- (20h às 7h), tecto de 400 MZN por dia, 20% de desconto ao sábado e ao
+-- domingo, multa de 500 MZN por talão perdido e avença de 3500 MZN por mês.
+INSERT INTO tariffs (free_minutes, fraction_minutes, hourly_rate_cents, daily_cap_cents,
+                     night_rate_cents, weekend_discount_pct, lost_ticket_cents, monthly_pass_cents,
+                     active, created_at)
+VALUES (15, 15, 6000, 40000, 3000, 20, 50000, 350000, TRUE, NOW());
 
 -- O primeiro talão é o número 1.
 INSERT INTO park_state (id, next_ticket_no) VALUES (1, 1);

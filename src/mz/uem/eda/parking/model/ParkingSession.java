@@ -8,7 +8,9 @@ public class ParkingSession {
         ACTIVE, 
 
         /*O carro  saiu e a estadia foi paga */
-        CLOSED
+        CLOSED,
+        /** A entrada foi desfeita pelo operador: o talão ficou anulado. */
+        VOIDED
     }
 
 
@@ -67,6 +69,19 @@ public class ParkingSession {
         this.exitTime = exitTime;
         this.manoeuvres = manoeuvres;
         this.status = Status.CLOSED;
+    }
+
+    /**
+     * Anula a entrada: o operador desfez-a (por exemplo, a matrícula estava
+     * errada). O carro sai sem pagar e o talão fica anulado.
+     *
+     * @throws IllegalStateException se a sessão já não estiver activa
+     */
+    public void voidEntry() {
+        if (status != Status.ACTIVE) {
+            throw new IllegalStateException("só se anula uma sessão activa: #" + ticketNumber);
+        }
+        status = Status.VOIDED;
     }
 
     public int getTicketNumber() {

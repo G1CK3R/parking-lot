@@ -160,6 +160,42 @@ public class SessionRepository {
     }
 
     /**
+     * Grava a anulação de uma entrada (desfazer), numa só transacção: a
+     * sessão fica {@code VOIDED} e a baia é regravada sem o carro. O talão
+     * não volta a ser usado.
+     *
+     * @param session a sessão já anulada ({@code ParkingSession.voidEntry})
+     * @param lane a baia de onde o carro saiu, já sem ele
+     * @throws IllegalArgumentException se a sessão não estiver anulada
+     * @throws SQLException se a gravação falhar (nada fica gravado)
+     */
+    public void recordVoidedEntry(ParkingSession session, Lane lane) throws SQLException {
+        Objects.requireNonNull(session, "session não pode ser null");
+        Objects.requireNonNull(lane, "lane não pode ser null");
+        if (session.getStatus() != ParkingSession.Status.VOIDED) {
+            throw new IllegalArgumentException("a sessão não foi anulada: " + session);
+        }
+        try (Connection c = connections.open()) {
+            c.setAutoCommit(false);
+            try {
+                try (PreparedStatement st = c.prepareStatement(
+                        "UPDATE parking_sessions SET status = ? WHERE ticket_no = ?")) {
+                    st.setString(1, session.getStatus().name());
+                    st.setInt(2, session.getTicketNumber());
+                    if (st.executeUpdate() != 1) {
+                        throw new SQLException("sessão por gravar: " + session);
+                    }
+                }
+                lanes.saveSlots(c, lane);
+                c.commit();
+            } catch (SQLException e) {
+                Sql.rollbackQuietly(c, e);
+                throw e;
+            }
+        }
+    }
+
+    /**
      * Carrega o histórico dos pagamentos, pela ordem em que foram gravados,
      * cada um com a sua sessão já fechada, o operador que cobrou e a tarifa
      * com que foi calculado (ADR-031). Quem coordena passa-os, um a um, ao
@@ -186,7 +222,7 @@ public class SessionRepository {
      */
     public Queue<Payment> loadPayments(Iterable<Tariff> tariffs) throws SQLException {
         Objects.requireNonNull(tariffs, "tariffs não pode ser null");
-        String sql = "SELECT p.id AS payment_id, p.tariff_id, p.amount_cents, p.method, p.paid_at, "
+        String sql = "SELECT p.id AS payment_id, p.tariff_id, p.amount_cents, p.lost_ticket_cents, p.method, p.paid_at, "
                 + "s.id AS session_id, s.ticket_no, s.stay_class, s.estimated_minutes, s.entry_at, "
                 + "s.exit_at, s.moves_count, l.code AS lane_code, "
                 + "v.id AS vehicle_id, v.plate, v.vehicle_type, "
@@ -216,7 +252,7 @@ public class SessionRepository {
 
                 Payment payment = new Payment(session, findTariff(tariffs, rs.getLong("tariff_id")),
                         rs.getLong("amount_cents"), Payment.Method.valueOf(rs.getString("method")),
-                        Sql.getTime(rs, "paid_at"), operator);
+                        Sql.getTime(rs, "paid_at"), operator, rs.getLong("lost_ticket_cents"));
                 payment.setId(rs.getLong("payment_id"));
                 payments.enqueue(payment);
             }
@@ -302,15 +338,16 @@ public class SessionRepository {
     }
 
     private static long insertPayment(Connection c, Payment payment) throws SQLException {
-        String sql = "INSERT INTO payments (session_id, tariff_id, amount_cents, method, paid_at, user_id) "
-                + "SELECT id, ?, ?, ?, ?, ? FROM parking_sessions WHERE ticket_no = ?";
+        String sql = "INSERT INTO payments (session_id, tariff_id, amount_cents, lost_ticket_cents, method, paid_at, "
+                + "user_id) SELECT id, ?, ?, ?, ?, ?, ? FROM parking_sessions WHERE ticket_no = ?";
         try (PreparedStatement st = c.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
             st.setLong(1, payment.getTariff().getId());
             st.setLong(2, payment.getAmountCents());
-            st.setString(3, payment.getMethod().name());
-            Sql.setTime(st, 4, payment.getPaidAt());
-            st.setLong(5, payment.getOperator().getId());
-            st.setInt(6, payment.getSession().getTicketNumber());
+            st.setLong(3, payment.getLostTicketCents());
+            st.setString(4, payment.getMethod().name());
+            Sql.setTime(st, 5, payment.getPaidAt());
+            st.setLong(6, payment.getOperator().getId());
+            st.setInt(7, payment.getSession().getTicketNumber());
             if (st.executeUpdate() != 1) {
                 throw new SQLException("sessão por gravar: " + payment.getSession());
             }
