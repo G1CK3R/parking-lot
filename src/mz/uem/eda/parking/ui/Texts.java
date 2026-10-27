@@ -73,6 +73,19 @@ public final class Texts {
         return String.format(PORTUGUESE, "%,.2f MZN", cents / 100.0);
     }
 
+    /**
+     * Escreve uma duração, por exemplo {@code "12 min"} ou {@code "3 h 05 min"}.
+     *
+     * @param minutes a duração, em minutos
+     * @return a duração formatada
+     */
+    public static String duration(long minutes) {
+        if (minutes < 60) {
+            return format("time.minutes", String.valueOf(minutes));
+        }
+        return format("time.hours", String.valueOf(minutes / 60), String.format("%02d", minutes % 60));
+    }
+
     /** Carrega o ficheiro na primeira vez que é preciso. */
     private static ResourceBundle bundle() {
         if (bundle == null) {

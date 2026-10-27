@@ -786,10 +786,15 @@ public final class ParkPanel extends JPanel {
         String top = Texts.get("park.legend.top");
         g.setColor(TEXT);
         g.drawString(top, (float) (x + 18), baseline);
+        x += 18 + fm.stringWidth(top) + 22;
 
+        // A dica do rato vai encostada à direita, só se couber sem tapar a legenda.
         String hint = Texts.get("park.legend.hint");
-        g.setColor(TEXT_DIM);
-        g.drawString(hint, (float) (geo.width - MARGIN - fm.stringWidth(hint)), baseline);
+        double hintX = geo.width - MARGIN - fm.stringWidth(hint);
+        if (hintX >= x) {
+            g.setColor(TEXT_DIM);
+            g.drawString(hint, (float) hintX, baseline);
+        }
     }
 
     // ------------------------------------------------------------------

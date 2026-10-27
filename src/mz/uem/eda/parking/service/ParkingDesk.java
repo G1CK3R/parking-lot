@@ -498,6 +498,22 @@ public class ParkingDesk {
     }
 
     /**
+     * @return quantos carros esperam na fila preferencial
+     * @complexity O(1)
+     */
+    public int preferentialWaitingCount() {
+        return waitingService.preferentialSize();
+    }
+
+    /**
+     * @return quantos carros esperam na fila normal
+     * @complexity O(1)
+     */
+    public int normalWaitingCount() {
+        return waitingService.normalSize();
+    }
+
+    /**
      * Os últimos {@link #RECENT_MOVES} movimentos, do mais antigo para o mais
      * recente: entradas, manobras e saídas.
      *

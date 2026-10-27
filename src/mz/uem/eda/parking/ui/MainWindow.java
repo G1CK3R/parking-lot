@@ -33,8 +33,9 @@ import mz.uem.eda.parking.ui.theme.Theme;
 
 /**
  * A janela principal: menu e barra de botões em cima, o painel do parque ao
- * centro e a barra de estado em baixo, com quem está a trabalhar, a
- * ocupação e a tarifa.
+ * centro, as filas de espera e os últimos movimentos à direita
+ * ({@link SidePanel}) e a barra de estado em baixo, com quem está a
+ * trabalhar, a ocupação e a tarifa.
  *
  * <p>A entrada e a saída abrem-se pelo menu Operações, pelos botões por
  * cima do parque ou pelas teclas F2 e F3. Depois de cada operação, o
@@ -52,6 +53,7 @@ public final class MainWindow {
     private final ParkingDesk desk;
     private final ParkPanel parkPanel;
     private final MoveAnimator animator;
+    private final SidePanel sidePanel;
     private final JMenuItem entryItem = new JMenuItem();
     private final JMenuItem exitItem = new JMenuItem();
     private final JButton entryButton = new JButton();
@@ -72,6 +74,8 @@ public final class MainWindow {
         this.parkPanel = new ParkPanel(desk);
         this.animator = new MoveAnimator(parkPanel, desk);
         frame.add(parkPanel, BorderLayout.CENTER);
+        this.sidePanel = new SidePanel(desk);
+        frame.add(sidePanel.getComponent(), BorderLayout.EAST);
         bindSkipKey();
         frame.add(statusBar(), BorderLayout.SOUTH);
         refreshStatus();
@@ -107,12 +111,13 @@ public final class MainWindow {
     }
 
     /**
-     * Mostra o estado actual do parque: redesenha as baias e volta a
-     * escrever a barra de estado. Os diálogos de entrada e saída vão
-     * chamá-lo depois de cada operação.
+     * Mostra o estado actual do parque: redesenha as baias, as filas de
+     * espera, os últimos movimentos e a barra de estado. Chama-se depois de
+     * cada operação, quando a animação acaba.
      */
     public void refresh() {
         parkPanel.repaint();
+        sidePanel.refresh();
         refreshStatus();
     }
 
@@ -214,10 +219,13 @@ public final class MainWindow {
         }
         ParkScene before = ParkScene.capture(desk.lanes());
         final ParkingSession session = EntryDialog.ask(frame, desk);
-        refresh();
         if (session == null) {
+            // Cancelada, ou o carro ficou na fila de espera: não há nada para animar.
+            refresh();
             return;
         }
+        // O painel lateral só muda no fim, para não mostrar o movimento antes de o animar.
+        refreshStatus();
         setOperationsEnabled(false);
         animator.playEntry(before, session, new Runnable() {
             @Override
@@ -239,10 +247,11 @@ public final class MainWindow {
         }
         ParkScene before = ParkScene.capture(desk.lanes());
         final ExitResult result = ExitDialog.ask(frame, desk);
-        refresh();
         if (result == null) {
+            refresh();
             return;
         }
+        refreshStatus();
         setOperationsEnabled(false);
         animator.playExit(before, result, new Runnable() {
             @Override
@@ -292,6 +301,8 @@ public final class MainWindow {
 
     /** Termina a sessão, fecha a janela e pede o login do próximo operador. */
     private void logout() {
+        animator.finish();
+        sidePanel.stop();
         desk.logout();
         frame.dispose();
         openAfterLogin(desk);
