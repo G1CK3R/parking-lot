@@ -540,6 +540,20 @@ public class ParkingDesk {
     }
 
     /**
+     * Quanto pagaria uma estadia com uma tarifa que ainda não está em vigor.
+     * Serve para o ecrã da tarifa mostrar exemplos antes de a gravar; usa as
+     * mesmas regras de cálculo da cobrança verdadeira e não muda nada.
+     *
+     * @param tariff a tarifa a experimentar
+     * @param minutes a duração da estadia, em minutos
+     * @return o valor, em centavos
+     * @complexity O(1)
+     */
+    public long priceWith(Tariff tariff, long minutes) {
+        return new BillingService(tariff).amountFor(minutes);
+    }
+
+    /**
      * @return quantos carros estão estacionados, sem contar a baia de
      *         manobra
      * @complexity O(B)

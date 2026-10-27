@@ -15,7 +15,6 @@ import javax.swing.JPasswordField;
 import javax.swing.JTextField;
 
 import mz.uem.eda.parking.model.User;
-import mz.uem.eda.parking.service.AuthService;
 import mz.uem.eda.parking.service.ParkingDesk;
 import mz.uem.eda.parking.ui.Texts;
 
@@ -61,7 +60,7 @@ public class FirstAdminDialog {
         form.addText(Texts.get("firstadmin.intro"));
         form.addField(Texts.get("login.username"), username);
         form.addField(Texts.get("login.password"), password);
-        form.addField(Texts.get("firstadmin.confirm"), confirm);
+        form.addField(Texts.get("password.confirm"), confirm);
         form.addMessage(message);
         form.addButtons(cancel, submit);
 
@@ -92,13 +91,11 @@ public class FirstAdminDialog {
         char[] secret = password.getPassword();
         char[] repeated = confirm.getPassword();
         try {
+            String problem = Passwords.problem(secret, repeated);
             if (name.isEmpty()) {
-                showProblem(Texts.get("firstadmin.error.blank"));
-            } else if (secret.length < AuthService.MIN_PASSWORD_LENGTH) {
-                showProblem(Texts.format("firstadmin.error.short",
-                        String.valueOf(AuthService.MIN_PASSWORD_LENGTH)));
-            } else if (!Arrays.equals(secret, repeated)) {
-                showProblem(Texts.get("firstadmin.error.mismatch"));
+                showProblem(Texts.get("user.error.blank"));
+            } else if (problem != null) {
+                showProblem(problem);
             } else {
                 create(name, secret);
             }

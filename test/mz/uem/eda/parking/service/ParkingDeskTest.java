@@ -186,6 +186,20 @@ class ParkingDeskTest {
     }
 
     @Test
+    void priceWithPreviewsATariffWithoutChangingIt() throws SQLException {
+        ParkingDesk desk = adminDesk();
+        Tariff active = desk.getTariff();
+        // O exemplo do BillingService: 15 min grátis, fracções de 15 min, 60 MZN/h, tecto de 400 MZN.
+        Tariff preview = new Tariff(15, 15, 6000, 40000);
+
+        assertEquals(0, desk.priceWith(preview, 10));
+        assertEquals(7500, desk.priceWith(preview, 61));
+        assertEquals(40000, desk.priceWith(preview, 10 * 60));
+        assertEquals(46000, desk.priceWith(preview, 25 * 60));
+        assertEquals(active, desk.getTariff());
+    }
+
+    @Test
     void recentMovesKeepOnlyTheLastTwenty() throws SQLException {
         ParkingDesk desk = adminDesk();
         for (int i = 1; i <= ParkingDesk.RECENT_MOVES + 5; i++) {

@@ -29,6 +29,9 @@ import mz.uem.eda.parking.ui.dialogs.EntryDialog;
 import mz.uem.eda.parking.ui.dialogs.ExitDialog;
 import mz.uem.eda.parking.ui.dialogs.FirstAdminDialog;
 import mz.uem.eda.parking.ui.dialogs.LoginDialog;
+import mz.uem.eda.parking.ui.dialogs.PasswordDialog;
+import mz.uem.eda.parking.ui.dialogs.TariffDialog;
+import mz.uem.eda.parking.ui.dialogs.UsersDialog;
 import mz.uem.eda.parking.ui.theme.Theme;
 
 /**
@@ -41,8 +44,14 @@ import mz.uem.eda.parking.ui.theme.Theme;
  * cima do parque ou pelas teclas F2 e F3. Depois de cada operação, o
  * {@link MoveAnimator} reproduz os movimentos no painel e só no fim aparece
  * o talão ou o recibo. Durante a animação as operações ficam bloqueadas; a
- * tecla Esc salta a animação. O menu da administração entra com os seus
- * ecrãs.
+ * tecla Esc salta a animação.
+ *
+ * <p>O menu Sessão tem, para todos, a mudança da própria palavra-passe. O
+ * menu Administração (utilizadores e tarifa) só existe na janela de um
+ * administrador: a janela constrói-se de novo a cada login, por isso um
+ * operador nunca o vê. A {@code ParkingDesk} volta a recusar estas
+ * operações a quem não for administrador; o menu escondido é só para não
+ * oferecer o que vai ser recusado.
  *
  * <p>Fala só com a {@link ParkingDesk}: não conhece baias, pilhas, filas nem
  * a base de dados (ADR-032).
@@ -147,7 +156,16 @@ public final class MainWindow {
             }
         });
 
+        JMenuItem password = new JMenuItem(Texts.get("menu.session.password"));
+        password.addActionListener(new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                PasswordDialog.askOwn(frame, desk);
+            }
+        });
+
         JMenu session = new JMenu(Texts.get("menu.session"));
+        session.add(password);
         session.add(logout);
         session.addSeparator();
         session.add(exit);
@@ -178,7 +196,35 @@ public final class MainWindow {
         JMenuBar bar = new JMenuBar();
         bar.add(session);
         bar.add(operations);
+        if (desk.getCurrentUser().getRole() == User.Role.ADMIN) {
+            bar.add(adminMenu());
+        }
         return bar;
+    }
+
+    /** O menu só do administrador: utilizadores e tarifa. */
+    private JMenu adminMenu() {
+        JMenuItem users = new JMenuItem(Texts.get("menu.admin.users"));
+        users.addActionListener(new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                UsersDialog.show(frame, desk);
+            }
+        });
+        JMenuItem tariff = new JMenuItem(Texts.get("menu.admin.tariff"));
+        tariff.addActionListener(new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                if (TariffDialog.ask(frame, desk)) {
+                    refreshStatus();
+                }
+            }
+        });
+
+        JMenu admin = new JMenu(Texts.get("menu.admin"));
+        admin.add(users);
+        admin.add(tariff);
+        return admin;
     }
 
     /** Os dois botões por cima do parque, para as operações do dia-a-dia. */
