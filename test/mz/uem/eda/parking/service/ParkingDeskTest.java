@@ -200,6 +200,38 @@ class ParkingDeskTest {
     }
 
     @Test
+    void reportsCoverEveryoneAndTheCashCloseOnlyTheOperator() throws SQLException {
+        ParkingDesk desk = adminDesk();
+        desk.registerUser("ana", "operadora-1".toCharArray(), User.Role.OPERATOR);
+        desk.enter("AAA001MC", Vehicle.Type.CAR, 60, T0);
+        desk.enter("AAA002MC", Vehicle.Type.CAR, 60, T0);
+        desk.exit(desk.findForExit("AAA002MC"), Payment.Method.CASH, T0.plusHours(2));
+
+        desk.login("ana", "operadora-1".toCharArray());
+        desk.exit(desk.findForExit("AAA001MC"), Payment.Method.MPESA, T0.plusHours(3));
+        LocalDateTime dayEnd = T0.plusDays(1);
+        CashClose close = desk.cashClose(T0, dayEnd);
+        assertEquals(1, close.getReport().getCount());
+        assertEquals("ana", close.getReport().getOperator());
+        assertThrows(SecurityException.class, () -> desk.revenue(T0, dayEnd));
+
+        desk.login("admin", ADMIN_PASSWORD);
+        assertEquals(2, desk.revenue(T0, dayEnd).getCount());
+
+        // Depois de reabrir, o histórico vem da base, com o operador de cada pagamento.
+        ParkingDesk reopened = open();
+        reopened.login("admin", ADMIN_PASSWORD);
+        RevenueReport report = reopened.revenue(T0, dayEnd);
+        assertEquals(2, report.getCount());
+        int operators = 0;
+        for (RevenueLine<String> line : report.byOperator()) {
+            operators++;
+            assertEquals(1, line.getCount());
+        }
+        assertEquals(2, operators);
+    }
+
+    @Test
     void recentMovesKeepOnlyTheLastTwenty() throws SQLException {
         ParkingDesk desk = adminDesk();
         for (int i = 1; i <= ParkingDesk.RECENT_MOVES + 5; i++) {

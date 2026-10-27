@@ -553,6 +553,44 @@ public class ParkingDesk {
         return new BillingService(tariff).amountFor(minutes);
     }
 
+    // ------------------------------------------------------------------
+    // Relatórios
+    // ------------------------------------------------------------------
+
+    /**
+     * A receita de um período, de todos os operadores (RF18): os pagamentos
+     * em três ordens e os totais por dia, por operador e por método. Só para
+     * o administrador.
+     *
+     * @param from o início do período, incluído
+     * @param to o fim do período, excluído
+     * @return o relatório
+     * @throws SecurityException se quem está autenticado não for
+     *         administrador
+     * @throws IllegalArgumentException se {@code from} não for antes de {@code to}
+     * @complexity O(d·n) para n pagamentos no período; ver {@link ReportService}
+     */
+    public RevenueReport revenue(LocalDateTime from, LocalDateTime to) {
+        AuthService.requireAdmin(currentUser);
+        return ReportService.revenue(paymentHistory.payments(), from, to, null);
+    }
+
+    /**
+     * O fecho de caixa de quem está autenticado (RF21): só os pagamentos
+     * que ele próprio cobrou entre {@code from} e {@code to}. Qualquer
+     * utilizador pode pedir o seu.
+     *
+     * @param from o início do turno; a interface passa a hora do login
+     * @param to o fim do turno; a interface passa a hora actual
+     * @return o fecho de caixa
+     * @throws IllegalStateException se ninguém estiver autenticado
+     * @throws IllegalArgumentException se {@code from} não for antes de {@code to}
+     */
+    public CashClose cashClose(LocalDateTime from, LocalDateTime to) {
+        requireLoggedIn();
+        return ReportService.cashClose(paymentHistory.payments(), currentUser, from, to);
+    }
+
     /**
      * @return quantos carros estão estacionados, sem contar a baia de
      *         manobra

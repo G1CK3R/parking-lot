@@ -73,6 +73,17 @@ public class PaymentHistoryService {
     }
 
     /**
+     * Percurso só de leitura do histórico, do mais antigo para o mais
+     * recente. Para os relatórios ({@link ReportService}).
+     *
+     * @return os pagamentos
+     * @complexity O(1) para obter; O(n) para percorrer
+     */
+    public Iterable<Payment> payments() {
+        return payments;
+    }
+
+    /**
      * @return quantos pagamentos tem o histórico
      * @complexity O(1)
      */
