@@ -5,28 +5,36 @@ import java.awt.Dimension;
 import java.awt.FlowLayout;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
+import java.awt.event.KeyEvent;
 
 import javax.swing.BorderFactory;
+import javax.swing.JButton;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
 import javax.swing.JMenu;
 import javax.swing.JMenuBar;
 import javax.swing.JMenuItem;
 import javax.swing.JPanel;
+import javax.swing.JToolBar;
+import javax.swing.KeyStroke;
 import javax.swing.UIManager;
 
 import mz.uem.eda.parking.model.User;
 import mz.uem.eda.parking.service.ParkingDesk;
+import mz.uem.eda.parking.ui.dialogs.EntryDialog;
+import mz.uem.eda.parking.ui.dialogs.ExitDialog;
 import mz.uem.eda.parking.ui.dialogs.FirstAdminDialog;
 import mz.uem.eda.parking.ui.dialogs.LoginDialog;
 import mz.uem.eda.parking.ui.theme.Theme;
 
 /**
- * A janela principal: menu em cima, o painel do parque ao centro e a barra
- * de estado em baixo, com quem está a trabalhar, a ocupação e a tarifa.
+ * A janela principal: menu e barra de botões em cima, o painel do parque ao
+ * centro e a barra de estado em baixo, com quem está a trabalhar, a
+ * ocupação e a tarifa.
  *
- * <p>Ao centro está o {@link ParkPanel}. Os menus das operações e da
- * administração entram com os seus diálogos.
+ * <p>A entrada e a saída abrem-se pelo menu Operações, pelos botões por
+ * cima do parque ou pelas teclas F2 e F3. Depois de cada operação a janela
+ * redesenha-se. O menu da administração entra com os seus ecrãs.
  *
  * <p>Fala só com a {@link ParkingDesk}: não conhece baias, pilhas, filas nem
  * a base de dados (ADR-032).
@@ -48,6 +56,7 @@ public final class MainWindow {
         this.frame = new JFrame(Texts.get("app.title"));
 
         frame.setJMenuBar(menuBar());
+        frame.add(toolBar(), BorderLayout.NORTH);
         this.parkPanel = new ParkPanel(desk);
         frame.add(parkPanel, BorderLayout.CENTER);
         frame.add(statusBar(), BorderLayout.SOUTH);
@@ -124,9 +133,69 @@ public final class MainWindow {
         session.addSeparator();
         session.add(exit);
 
+        JMenuItem entry = new JMenuItem(Texts.get("menu.operations.entry"));
+        entry.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_F2, 0));
+        entry.addActionListener(new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                openEntry();
+            }
+        });
+        JMenuItem carOut = new JMenuItem(Texts.get("menu.operations.exit"));
+        carOut.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_F3, 0));
+        carOut.addActionListener(new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                openExit();
+            }
+        });
+
+        JMenu operations = new JMenu(Texts.get("menu.operations"));
+        operations.add(entry);
+        operations.add(carOut);
+
         JMenuBar bar = new JMenuBar();
         bar.add(session);
+        bar.add(operations);
         return bar;
+    }
+
+    /** Os dois botões por cima do parque, para as operações do dia-a-dia. */
+    private JToolBar toolBar() {
+        JButton entry = new JButton(Texts.get("toolbar.entry"));
+        entry.addActionListener(new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                openEntry();
+            }
+        });
+        JButton carOut = new JButton(Texts.get("toolbar.exit"));
+        carOut.addActionListener(new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                openExit();
+            }
+        });
+
+        JToolBar bar = new JToolBar();
+        bar.setFloatable(false);
+        bar.setBorder(BorderFactory.createEmptyBorder(Theme.GAP / 2, Theme.PADDING, Theme.GAP / 2, Theme.PADDING));
+        bar.add(entry);
+        bar.addSeparator();
+        bar.add(carOut);
+        return bar;
+    }
+
+    private void openEntry() {
+        if (EntryDialog.ask(frame, desk)) {
+            refresh();
+        }
+    }
+
+    private void openExit() {
+        if (ExitDialog.ask(frame, desk)) {
+            refresh();
+        }
     }
 
     private JPanel statusBar() {
