@@ -235,7 +235,7 @@ class BillingServiceTest {
     // ---- auxiliares -----------------------------------------------------
 
     private static ParkingSession session() {
-        Vehicle vehicle = new Vehicle("AAA001MC", Vehicle.Type.CAR, null);
+        Vehicle vehicle = new Vehicle("AAA001MC", Vehicle.Type.CAR);
         return new ParkingSession(1, vehicle, "L01", StayClass.SHORT, 60, ENTRY);
     }
 }

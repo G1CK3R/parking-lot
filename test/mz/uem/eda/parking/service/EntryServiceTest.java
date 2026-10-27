@@ -110,6 +110,6 @@ class EntryServiceTest {
     }
 
     private static Vehicle car(String plate) {
-        return new Vehicle(plate, Vehicle.Type.CAR, null);
+        return new Vehicle(plate, Vehicle.Type.CAR);
     }
 }

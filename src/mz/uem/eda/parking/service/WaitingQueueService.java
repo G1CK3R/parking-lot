@@ -3,7 +3,6 @@ package mz.uem.eda.parking.service;
 import java.time.LocalDateTime;
 import java.util.Objects;
 
-import mz.uem.eda.parking.model.Customer;
 import mz.uem.eda.parking.model.Lane;
 import mz.uem.eda.parking.model.ParkingSession;
 import mz.uem.eda.parking.model.Vehicle;
@@ -18,9 +17,9 @@ import mz.uem.eda.parking.structures.Queue;
  * se tem prioridade sem fila de prioridade (ADR-007): nenhuma fila é
  * ordenada, cada uma é atendida pela ordem de chegada.
  *
- * <p>Um carro vai para a fila preferencial se a viatura tiver um cliente
- * marcado como preferencial ({@link Customer#isPreferential()}); todos os
- * outros, incluindo os condutores ocasionais sem cliente, vão para a normal.
+ * <p>Um carro vai para a fila preferencial se o operador o marcar à entrada
+ * como cliente preferencial (idoso, grávida, pessoa com deficiência); todos
+ * os outros vão para a normal.
  *
  * <p>Fluxo previsto: o {@link EntryService} devolve {@code null} com o parque
  * cheio e a interface chama {@link #join}; depois de cada saída, chama
@@ -78,12 +77,12 @@ public class WaitingQueueService {
     }
 
     /**
-     * Põe o carro no fim da fila que lhe cabe.
+     * Põe o carro no fim da fila normal.
      *
      * @param vehicle a viatura que chegou
      * @param estimatedMinutes a duração estimada, em minutos
      * @param arrivedAt a hora de chegada
-     * @return o registo do carro em espera, que diz em que fila ficou
+     * @return o registo do carro em espera
      * @throws IllegalArgumentException se a duração não for positiva
      * @throws IllegalStateException se o carro já estiver estacionado ou já
      *         estiver à espera
@@ -91,8 +90,7 @@ public class WaitingQueueService {
      *             nos w em espera; enfileirar é O(1)
      */
     public WaitingCar join(Vehicle vehicle, int estimatedMinutes, LocalDateTime arrivedAt) {
-        Objects.requireNonNull(vehicle, "vehicle não pode ser null");
-        return join(vehicle, estimatedMinutes, arrivedAt, isPreferential(vehicle));
+        return join(vehicle, estimatedMinutes, arrivedAt, false);
     }
 
     /**
@@ -254,11 +252,6 @@ public class WaitingQueueService {
             }
         }
         return false;
-    }
-
-    private static boolean isPreferential(Vehicle vehicle) {
-        Customer customer = vehicle.getCustomer();
-        return customer != null && customer.isPreferential();
     }
 
     private static boolean contains(Queue<WaitingCar> queue, Vehicle vehicle) {

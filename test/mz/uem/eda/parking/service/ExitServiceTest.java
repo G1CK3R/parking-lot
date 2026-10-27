@@ -198,7 +198,7 @@ class ExitServiceTest {
     // ---- auxiliares -----------------------------------------------------
 
     private void park(Lane target, String plate) {
-        Vehicle vehicle = new Vehicle(plate, Vehicle.Type.CAR, null);
+        Vehicle vehicle = new Vehicle(plate, Vehicle.Type.CAR);
         target.asStack().push(new ParkingSession(ticket, vehicle, target.getCode(),
                 StayClass.FULL_DAY, 180, ENTRY));
         ticket++;

@@ -840,7 +840,8 @@ public final class ParkPanel extends JPanel {
         }
         return Texts.format("park.tooltip", session.getVehicle().getPlate(),
                 String.valueOf(session.getTicketNumber()),
-                Texts.get("stay." + session.getStayClass().name()), entered, depth);
+                Texts.get("stay." + session.getStayClass().name()), entered, depth,
+                Texts.get("vehicle." + session.getVehicle().getType().name()));
     }
 
     private static Rectangle union(CarSpot a, CarSpot b) {

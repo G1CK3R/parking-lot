@@ -163,7 +163,7 @@ class RepositoryTest {
 
         Reservation r = service.reserve("AAA001MC", 60, T0);
         repo.insert(r);
-        ParkingSession s = service.checkIn(new Vehicle("AAA001MC", Vehicle.Type.CAR, null), T0.plusMinutes(5));
+        ParkingSession s = service.checkIn(new Vehicle("AAA001MC", Vehicle.Type.CAR), T0.plusMinutes(5));
         Lane lane = null;
         for (Lane l : lanes) {
             if (l.getCode().equals(s.getLaneCode())) {

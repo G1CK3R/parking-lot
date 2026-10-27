@@ -25,7 +25,7 @@ class RestoreStateTest {
         EntryService entry = new EntryService(lanes(), new FirstWithSpace());
         entry.restoreNextTicketNumber(42);
 
-        assertEquals(42, entry.enter(new Vehicle("AAA001MC", Vehicle.Type.CAR, null), 60, T0).getTicketNumber());
+        assertEquals(42, entry.enter(new Vehicle("AAA001MC", Vehicle.Type.CAR), 60, T0).getTicketNumber());
         assertEquals(43, entry.getNextTicketNumber());
         assertThrows(IllegalArgumentException.class, () -> entry.restoreNextTicketNumber(0));
     }

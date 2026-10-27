@@ -160,7 +160,7 @@ class PlacementPolicyTest {
 
     private void park(Lane lane, StayClass stayClass, int count) {
         for (int i = 0; i < count; i++) {
-            Vehicle vehicle = new Vehicle("CAR" + ticket, Vehicle.Type.CAR, null);
+            Vehicle vehicle = new Vehicle("CAR" + ticket, Vehicle.Type.CAR);
             lane.asStack().push(new ParkingSession(ticket, vehicle, lane.getCode(), stayClass, 60, T0));
             ticket++;
         }

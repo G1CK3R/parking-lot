@@ -37,24 +37,15 @@ CREATE TABLE users (
     UNIQUE KEY uk_users_username (username)
 ) ENGINE = InnoDB;
 
--- Clientes registados. Os ocasionais não têm linha aqui.
-CREATE TABLE customers (
-    id            BIGINT       NOT NULL AUTO_INCREMENT,
-    name          VARCHAR(100) NOT NULL,
-    phone         VARCHAR(30)  NULL,
-    preferential  BOOLEAN      NOT NULL DEFAULT FALSE,
-    PRIMARY KEY (id)
-) ENGINE = InnoDB;
-
--- Viaturas, com a matrícula normalizada (maiúsculas, sem espaços nem hífenes).
+-- Viaturas, com a matrícula normalizada (maiúsculas, sem espaços nem hífenes)
+-- e o último tipo registado. Não há tabela de clientes: o parque trabalha com
+-- condutores ocasionais, e a avença guarda o nome e o telefone do cliente.
 CREATE TABLE vehicles (
     id            BIGINT      NOT NULL AUTO_INCREMENT,
     plate         VARCHAR(20) NOT NULL,
     vehicle_type  VARCHAR(20) NOT NULL,
-    customer_id   BIGINT      NULL,
     PRIMARY KEY (id),
-    UNIQUE KEY uk_vehicles_plate (plate),
-    CONSTRAINT fk_vehicles_customer FOREIGN KEY (customer_id) REFERENCES customers (id)
+    UNIQUE KEY uk_vehicles_plate (plate)
 ) ENGINE = InnoDB;
 
 -- Baias, pela ordem da configuração (a ordem dos id). A de manobra não tem classe.

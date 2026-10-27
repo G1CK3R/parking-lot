@@ -10,7 +10,6 @@ import java.time.LocalDateTime;
 import java.util.Locale;
 import java.util.Objects;
 
-import mz.uem.eda.parking.model.Customer;
 import mz.uem.eda.parking.model.Lane;
 import mz.uem.eda.parking.model.ParkingSession;
 import mz.uem.eda.parking.model.RetrievalPlan;
@@ -66,9 +65,6 @@ public class Simulator {
     /** O dia de calendário usado para as horas das sessões (é indiferente qual). */
     private static final LocalDateTime MIDNIGHT = LocalDateTime.of(2026, 11, 2, 0, 0);
 
-    /** O cliente dos carros preferenciais: só interessa o {@code isPreferential()}. */
-    private static final Customer PREFERENTIAL = new Customer("Cliente preferencial", null, true);
-
     /**
      * Simula um dia.
      *
@@ -123,8 +119,7 @@ public class Simulator {
             while (!arrivals.isEmpty() && arrivals.peek().getArrivalMinute() <= minute) {
                 Arrival arrival = arrivals.dequeue();
                 metrics.recordArrival();
-                Vehicle vehicle = new Vehicle(arrival.getPlate(), Vehicle.Type.CAR,
-                        arrival.isPreferential() ? PREFERENTIAL : null);
+                Vehicle vehicle = new Vehicle(arrival.getPlate(), Vehicle.Type.CAR);
                 ParkingSession session = null;
                 if (waiting.isEmpty()) {
                     session = entry.enter(vehicle, arrival.getDeclaredMinutes(), now);
@@ -132,7 +127,7 @@ public class Simulator {
                 if (session != null) {
                     park(parked, metrics, arrival, session, minute);
                 } else {
-                    waiting.join(vehicle, arrival.getDeclaredMinutes(), now);
+                    waiting.join(vehicle, arrival.getDeclaredMinutes(), now, arrival.isPreferential());
                     waitingArrivals.enqueue(arrival);
                 }
             }

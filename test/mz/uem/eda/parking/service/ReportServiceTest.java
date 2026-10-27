@@ -185,7 +185,7 @@ class ReportServiceTest {
     @Test
     void historyJoinsParkedCarsAndPaymentsByEntryTime() {
         Lane lane = Lane.parking("J01", 3, StayClass.FULL_DAY);
-        lane.asStack().push(new ParkingSession(11, new Vehicle("DDD300MC", Vehicle.Type.CAR, null), "J01",
+        lane.asStack().push(new ParkingSession(11, new Vehicle("DDD300MC", Vehicle.Type.CAR), "J01",
                 StayClass.FULL_DAY, 60, DAY1.plusHours(9).plusMinutes(30)));
         Queue<Lane> lanes = new LinkedQueue<>();
         lanes.enqueue(lane);
@@ -228,7 +228,7 @@ class ReportServiceTest {
 
     private static Payment payment(int ticket, LocalDateTime paidAt, long cents, Payment.Method method,
             User operator) {
-        ParkingSession session = new ParkingSession(ticket, new Vehicle("AAA" + ticket + "00MC", Vehicle.Type.CAR, null),
+        ParkingSession session = new ParkingSession(ticket, new Vehicle("AAA" + ticket + "00MC", Vehicle.Type.CAR),
                 "J01", StayClass.FULL_DAY, 60, paidAt.minusHours(1));
         session.close(paidAt, 0);
         return new Payment(session, TARIFF, cents, method, paidAt, operator);

@@ -2,7 +2,21 @@ package mz.uem.eda.parking.model;
 
 import java.util.Objects;
 
+/**
+ * Uma viatura: a matrícula normalizada e o tipo (ligeiro, motociclo,
+ * carrinha). O tipo escolhe-se à entrada e aparece no talão, no recibo, na
+ * pesquisa, no histórico e na dica do rato; não muda a baia nem o preço.
+ *
+ * <p>Não há cliente associado: o parque trabalha com condutores
+ * ocasionais, e quem precisa de ser identificado (uma avença) guarda o nome
+ * e o telefone na própria {@link MonthlyPass}. A marca de preferencial é do
+ * balcão, à entrada, e vai directamente para a fila de espera.
+ *
+ * <p>Imutável, excepto o identificador da base de dados.
+ */
 public class Vehicle {
+
+    /** O tipo de viatura. */
     public enum Type {
         CAR,
         MOTORCYCLE,
@@ -11,13 +25,17 @@ public class Vehicle {
 
     private final String plate;
     private final Type type;
-    private final Customer customer;
 
     /** Identificador na base de dados */
     private long id;
 
 
-    public Vehicle(String plate, Type type, Customer customer) {
+    /**
+     * @param plate a matrícula, com ou sem espaços e hífenes
+     * @param type o tipo de viatura
+     * @throws IllegalArgumentException se a matrícula ficar vazia
+     */
+    public Vehicle(String plate, Type type) {
         Objects.requireNonNull(type, "type must not be null");
         String normalized =  normalizePlate(plate);
         if (normalized.isEmpty()) {
@@ -25,7 +43,6 @@ public class Vehicle {
         }       
         this.plate =  normalized;
         this.type =  type;
-        this.customer =  customer;
     }
 
     /**
@@ -62,10 +79,6 @@ public class Vehicle {
         return type;
     }
 
-    public Customer getCustomer() {
-        return customer;
-    }
-
     public long getId() {
         return id;
     }
@@ -82,7 +95,7 @@ public class Vehicle {
 
     /**
      * Duas viaturas são iguais se tiverem a mesma matrícula normalizada. O
-     * tipo e o cliente não contam.
+     * tipo não conta.
      */
     @Override
     public boolean equals(Object other) {

@@ -7,7 +7,6 @@ import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.Objects;
 
-import mz.uem.eda.parking.model.Customer;
 import mz.uem.eda.parking.model.Lane;
 import mz.uem.eda.parking.model.ParkingSession;
 import mz.uem.eda.parking.model.Payment;
@@ -20,9 +19,9 @@ import mz.uem.eda.parking.structures.LinkedQueue;
 import mz.uem.eda.parking.structures.Queue;
 
 /**
- * Grava as entradas e as saídas: sessões, talões, viaturas, clientes e
- * pagamentos (tabelas {@code parking_sessions}, {@code vehicles},
- * {@code customers}, {@code payments} e {@code park_state}).
+ * Grava as entradas e as saídas: sessões, talões, viaturas e pagamentos
+ * (tabelas {@code parking_sessions}, {@code vehicles}, {@code payments} e
+ * {@code park_state}).
  *
  * <p><b>Cada operação é uma transacção.</b> Uma entrada grava a sessão, a
  * baia onde o carro ficou e o número do próximo talão de uma vez; uma saída
@@ -59,8 +58,8 @@ public class SessionRepository {
     }
 
     /**
-     * Grava uma entrada, numa só transacção: a viatura (e o cliente) se
-     * ainda não existirem, a sessão, o conteúdo da baia onde o carro ficou, o
+     * Grava uma entrada, numa só transacção: a viatura (nova, ou com o tipo
+     * actualizado se a matrícula já existir), a sessão, o conteúdo da baia onde o carro ficou, o
      * número do próximo talão e, se o carro tinha reserva, o check-in.
      *
      * @param session a sessão devolvida pelo {@code EntryService} ou pelo
@@ -81,18 +80,12 @@ public class SessionRepository {
             throw new IllegalArgumentException("a sessão " + session + " não está na baia " + lane.getCode());
         }
         Vehicle vehicle = session.getVehicle();
-        Customer customer = vehicle.getCustomer();
-        long customerId = 0;
         long vehicleId;
         long sessionId;
         try (Connection c = connections.open()) {
             c.setAutoCommit(false);
             try {
-                if (customer != null && customer.getId() == 0) {
-                    customerId = insertCustomer(c, customer);
-                }
-                vehicleId = findOrInsertVehicle(c, vehicle, customer == null ? 0
-                        : (customer.getId() != 0 ? customer.getId() : customerId));
+                vehicleId = findOrInsertVehicle(c, vehicle);
                 sessionId = insertSession(c, session, vehicleId);
                 lanes.saveSlots(c, lane);
                 saveNextTicketNumber(c, nextTicketNumber);
@@ -104,9 +97,6 @@ public class SessionRepository {
                 Sql.rollbackQuietly(c, e);
                 throw e;
             }
-        }
-        if (customerId != 0) {
-            customer.setId(customerId);
         }
         if (vehicle.getId() == 0) {
             vehicle.setId(vehicleId);
@@ -226,13 +216,11 @@ public class SessionRepository {
                 + "s.id AS session_id, s.ticket_no, s.stay_class, s.estimated_minutes, s.entry_at, "
                 + "s.exit_at, s.moves_count, l.code AS lane_code, "
                 + "v.id AS vehicle_id, v.plate, v.vehicle_type, "
-                + "cu.id AS customer_id, cu.name, cu.phone, cu.preferential, "
                 + "u.id AS user_id, u.username, u.password_hash, u.salt, u.iterations, u.role "
                 + "FROM payments p "
                 + "JOIN parking_sessions s ON s.id = p.session_id "
                 + "JOIN lanes l ON l.id = s.lane_id "
                 + "JOIN vehicles v ON v.id = s.vehicle_id "
-                + "LEFT JOIN customers cu ON cu.id = v.customer_id "
                 + "JOIN users u ON u.id = p.user_id "
                 + "ORDER BY p.id";
         Queue<Payment> payments = new LinkedQueue<>();
@@ -279,40 +267,33 @@ public class SessionRepository {
         }
     }
 
-    private static long insertCustomer(Connection c, Customer customer) throws SQLException {
-        String sql = "INSERT INTO customers (name, phone, preferential) VALUES (?, ?, ?)";
-        try (PreparedStatement st = c.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
-            st.setString(1, customer.getName());
-            st.setString(2, customer.getPhone());
-            st.setBoolean(3, customer.isPreferential());
-            st.executeUpdate();
-            return Sql.generatedKey(st);
-        }
-    }
-
     /**
      * O id da viatura: a que já está na base com esta matrícula, ou uma
-     * nova. Uma viatura que já existe fica como está (o cliente associado
-     * não é mudado aqui).
+     * nova. Se a matrícula já existir, o tipo fica o que o operador escolheu
+     * agora (a viatura tem um só tipo, o último registado).
      */
-    private static long findOrInsertVehicle(Connection c, Vehicle vehicle, long customerId) throws SQLException {
+    private static long findOrInsertVehicle(Connection c, Vehicle vehicle) throws SQLException {
+        long id = 0;
         try (PreparedStatement st = c.prepareStatement("SELECT id FROM vehicles WHERE plate = ?")) {
             st.setString(1, vehicle.getPlate());
             try (ResultSet rs = st.executeQuery()) {
                 if (rs.next()) {
-                    return rs.getLong(1);
+                    id = rs.getLong(1);
                 }
             }
         }
-        String sql = "INSERT INTO vehicles (plate, vehicle_type, customer_id) VALUES (?, ?, ?)";
+        if (id != 0) {
+            try (PreparedStatement st = c.prepareStatement("UPDATE vehicles SET vehicle_type = ? WHERE id = ?")) {
+                st.setString(1, vehicle.getType().name());
+                st.setLong(2, id);
+                st.executeUpdate();
+            }
+            return id;
+        }
+        String sql = "INSERT INTO vehicles (plate, vehicle_type) VALUES (?, ?)";
         try (PreparedStatement st = c.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
             st.setString(1, vehicle.getPlate());
             st.setString(2, vehicle.getType().name());
-            if (customerId == 0) {
-                st.setNull(3, java.sql.Types.BIGINT);
-            } else {
-                st.setLong(3, customerId);
-            }
             st.executeUpdate();
             return Sql.generatedKey(st);
         }

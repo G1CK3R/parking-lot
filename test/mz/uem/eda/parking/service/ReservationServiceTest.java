@@ -253,7 +253,7 @@ class ReservationServiceTest {
     // ---- auxiliares -----------------------------------------------------
 
     private static Vehicle car(String plate) {
-        return new Vehicle(plate, Vehicle.Type.CAR, null);
+        return new Vehicle(plate, Vehicle.Type.CAR);
     }
 
     private static int count(Iterable<Reservation> all) {

@@ -120,7 +120,8 @@ public class EntryDialog {
     }
 
     /**
-     * Mostra o talão de uma entrada: número, matrícula, baia, classe e hora.
+     * Mostra o talão de uma entrada: número, matrícula e tipo, baia, classe e
+     * hora.
      *
      * @param owner a janela principal
      * @param session a sessão do carro que entrou
@@ -130,7 +131,8 @@ public class EntryDialog {
                 Texts.format("entry.done", String.valueOf(session.getTicketNumber()),
                         session.getVehicle().getPlate(), session.getLaneCode(),
                         Texts.get("stay." + session.getStayClass().name()),
-                        session.getEntryTime().format(TIME)),
+                        session.getEntryTime().format(TIME),
+                        Texts.get("vehicle." + session.getVehicle().getType().name())),
                 Texts.get("entry.done.title"), JOptionPane.INFORMATION_MESSAGE);
     }
 

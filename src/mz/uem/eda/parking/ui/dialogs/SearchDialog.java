@@ -33,7 +33,7 @@ import mz.uem.eda.parking.ui.theme.Theme;
 /**
  * A pesquisa de viaturas estacionadas (RF09), para qualquer utilizador:
  * escreve-se um pedaço da matrícula ou o número do talão e a lista vai-se
- * filtrando enquanto se escreve. Para cada carro mostra a baia, quantos
+ * filtrando enquanto se escreve. Para cada carro mostra o tipo, a baia, quantos
  * carros tem por cima e quantas manobras custa tirá-lo, que é o que o
  * operador quer saber antes de chamar o condutor.
  *
@@ -51,9 +51,9 @@ public final class SearchDialog {
     private final ParkingDesk desk;
     private final JTextField text = new JTextField(24);
     private final DefaultTableModel table = ReportParts.model("report.column.ticket", "report.column.plate",
-            "report.column.lane", "search.column.position", "search.column.manoeuvres", "report.column.entry",
+            "report.column.type", "report.column.lane", "search.column.position", "search.column.manoeuvres", "report.column.entry",
             "report.column.stay");
-    private final JScrollPane tableScroll = ReportParts.table(table, 0, 4, 6);
+    private final JScrollPane tableScroll = ReportParts.table(table, 0, 5, 7);
     private final JLabel note = ReportParts.note();
     private final JButton exit = new JButton(Texts.get("search.exit"));
     private String chosen;
@@ -105,7 +105,7 @@ public final class SearchDialog {
                 dialog.dispose();
             }
         });
-        ReportParts.widths(tableScroll, 60, 110, 60, 100, 90, 110, 100);
+        ReportParts.widths(tableScroll, 55, 100, 80, 50, 90, 80, 110, 80);
 
         JPanel searchRow = new JPanel(new BorderLayout(0, Theme.GAP / 2));
         searchRow.add(new JLabel(Texts.get("search.text")), BorderLayout.NORTH);
@@ -126,7 +126,7 @@ public final class SearchDialog {
 
         dialog.setContentPane(content);
         dialog.setDefaultCloseOperation(JDialog.DISPOSE_ON_CLOSE);
-        dialog.setSize(820, 500);
+        dialog.setSize(880, 500);
         dialog.setLocationRelativeTo(owner);
         refresh();
     }
@@ -155,7 +155,7 @@ public final class SearchDialog {
                     : Texts.format("search.position", String.valueOf(car.getDepth()));
             long stayed = Math.max(0, Duration.between(session.getEntryTime(), now).toMinutes());
             table.addRow(new Object[] { String.valueOf(session.getTicketNumber()), session.getVehicle().getPlate(),
-                session.getLaneCode(), position, String.valueOf(car.getManoeuvres()),
+                Texts.get("vehicle." + session.getVehicle().getType().name()), session.getLaneCode(), position, String.valueOf(car.getManoeuvres()),
                 session.getEntryTime().format(ReportParts.DATE_TIME), Texts.duration(stayed) });
         }
         if (table.getRowCount() == 0) {

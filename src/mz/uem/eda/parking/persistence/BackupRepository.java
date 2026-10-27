@@ -47,7 +47,7 @@ public class BackupRepository {
     public static final String HEADER = "PARKING-LOT-BACKUP 1";
 
     /** As tabelas, pela ordem das chaves estrangeiras: cada uma só aponta para as anteriores. */
-    private static final String[] TABLES = { "users", "customers", "vehicles", "lanes", "parking_sessions",
+    private static final String[] TABLES = { "users", "vehicles", "lanes", "parking_sessions",
         "lane_slots", "tariffs", "payments", "reservations", "park_state", "monthly_passes", "audit_log" };
 
     private static final String NULL = "\\N";

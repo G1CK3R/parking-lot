@@ -374,7 +374,7 @@ public class ParkingDesk {
             boolean preferentialCustomer, LocalDateTime now) throws SQLException {
         requireLoggedIn();
         Objects.requireNonNull(now, "now não pode ser null");
-        Vehicle vehicle = new Vehicle(plate, type, null);
+        Vehicle vehicle = new Vehicle(plate, type);
         if (waitingService.isWaiting(vehicle)) {
             throw new IllegalStateException("veículo já está à espera: " + vehicle.getPlate());
         }

@@ -304,11 +304,12 @@ esquema está desactualizado. Ver [Problemas comuns](#problemas-comuns).
 **Atalhos:** F2 entrada · F3 saída · F4 fecho de caixa · F5 reservas · F6 avenças · F7 pesquisar
 viatura · Ctrl+Z desfazer · Esc salta a animação.
 
-**Uma entrada.** F2, matrícula, tipo de viatura e quanto tempo o condutor diz que fica. O programa
-escolhe a baia, anima o carro desde a entrada e mostra o talão. Se o parque estiver cheio, o carro fica
-na fila de espera e aparece no painel lateral; marcando «Cliente preferencial» (idoso, grávida, pessoa
-com deficiência), espera na fila preferencial. Se a matrícula tiver reserva, entra com a duração da
-reserva.
+**Uma entrada.** F2, matrícula, tipo de viatura e quanto tempo o condutor diz que fica. O tipo
+(ligeiro, motociclo, carrinha) aparece no talão, no recibo, na pesquisa, no histórico e na dica do
+rato; não muda a baia nem o preço. O programa escolhe a baia, anima o carro desde a entrada e mostra
+o talão. Se o parque estiver cheio, o carro fica na fila de espera e aparece no painel lateral;
+marcando «Cliente preferencial» (idoso, grávida, pessoa com deficiência), espera na fila preferencial.
+Se a matrícula tiver reserva, entra com a duração da reserva.
 
 **Uma saída.** F3, matrícula ou número do talão, Procurar. Aparece o valor a pagar, calculado à hora
 da procura. Se a matrícula tiver avença válida, o diálogo diz de quem é e a estadia não se paga. Se o
@@ -555,6 +556,11 @@ Decisões assumidas, a defender no relatório:
   períodos.
 - **Restaurar uma cópia obriga a reabrir o programa**, porque o que está em memória deixa de
   corresponder à base.
+- **Não há registo de clientes.** O parque trabalha com condutores ocasionais: a viatura é só a
+  matrícula e o tipo, a marca de preferencial dá-se ao balcão em cada entrada, e a avença guarda o nome
+  e o telefone de quem a compra.
+- **Uma matrícula tem um só tipo**, o último registado: se voltar com outro tipo, o histórico passa a
+  mostrar o novo também nas estadias antigas.
 - **Pagamentos só registados**: numerário, M-Pesa, e-Mola e cartão, sem ligação a nenhum serviço de
   pagamento (ADR-027).
 

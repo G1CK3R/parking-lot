@@ -6,7 +6,6 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.Objects;
 
-import mz.uem.eda.parking.model.Customer;
 import mz.uem.eda.parking.model.Lane;
 import mz.uem.eda.parking.model.ParkingSession;
 import mz.uem.eda.parking.model.StayClass;
@@ -44,7 +43,7 @@ public class LaneRepository {
     /**
      * Carrega as baias, pela ordem da configuração, com os carros nas mesmas
      * posições em que ficaram. As sessões repostas estão activas e têm o id
-     * da base; as viaturas e os clientes também.
+     * da base; as viaturas também.
      *
      * @return as baias, incluindo a de manobra (vazia)
      * @throws SQLException se a leitura falhar
@@ -122,13 +121,11 @@ public class LaneRepository {
     private static void loadSlots(Connection c, Queue<Lane> lanes) throws SQLException {
         String sql = "SELECT ls.lane_id, ls.position, l.code AS lane_code, "
                 + "s.id AS session_id, s.ticket_no, s.stay_class, s.estimated_minutes, s.entry_at, "
-                + "v.id AS vehicle_id, v.plate, v.vehicle_type, "
-                + "cu.id AS customer_id, cu.name, cu.phone, cu.preferential "
+                + "v.id AS vehicle_id, v.plate, v.vehicle_type "
                 + "FROM lane_slots ls "
                 + "JOIN lanes l ON l.id = ls.lane_id "
                 + "JOIN parking_sessions s ON s.id = ls.session_id "
                 + "JOIN vehicles v ON v.id = s.vehicle_id "
-                + "LEFT JOIN customers cu ON cu.id = v.customer_id "
                 + "ORDER BY ls.lane_id, ls.position";
         try (PreparedStatement st = c.prepareStatement(sql); ResultSet rs = st.executeQuery()) {
             while (rs.next()) {
@@ -146,16 +143,9 @@ public class LaneRepository {
         }
     }
 
-    /** Monta a viatura, e o cliente se tiver, a partir de uma linha com as colunas do JOIN. */
+    /** Monta a viatura a partir de uma linha com as colunas do JOIN. */
     static Vehicle vehicleFrom(ResultSet rs) throws SQLException {
-        Customer customer = null;
-        long customerId = rs.getLong("customer_id");
-        if (!rs.wasNull()) {
-            customer = new Customer(rs.getString("name"), rs.getString("phone"), rs.getBoolean("preferential"));
-            customer.setId(customerId);
-        }
-        Vehicle vehicle = new Vehicle(rs.getString("plate"), Vehicle.Type.valueOf(rs.getString("vehicle_type")),
-                customer);
+        Vehicle vehicle = new Vehicle(rs.getString("plate"), Vehicle.Type.valueOf(rs.getString("vehicle_type")));
         vehicle.setId(rs.getLong("vehicle_id"));
         return vehicle;
     }

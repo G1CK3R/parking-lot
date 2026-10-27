@@ -59,7 +59,7 @@ class FirstWithSpaceTest {
     // ---- auxiliares -----------------------------------------------------
 
     private void park(Lane lane) {
-        Vehicle vehicle = new Vehicle("CAR" + ticket, Vehicle.Type.CAR, null);
+        Vehicle vehicle = new Vehicle("CAR" + ticket, Vehicle.Type.CAR);
         lane.asStack().push(new ParkingSession(ticket, vehicle, lane.getCode(),
                 StayClass.FULL_DAY, 60, T0));
         ticket++;

@@ -222,7 +222,8 @@ public class ExitDialog {
         summary.setText(Texts.format("exit.summary", session.getVehicle().getPlate(),
                 String.valueOf(session.getTicketNumber()), session.getLaneCode(),
                 Texts.get("stay." + session.getStayClass().name()), entered,
-                Texts.format("exit.stayed", String.valueOf(stayed / 60), String.valueOf(stayed % 60))));
+                Texts.format("exit.stayed", String.valueOf(stayed / 60), String.valueOf(stayed % 60)),
+                Texts.get("vehicle." + session.getVehicle().getType().name())));
 
         MonthlyPass valid = desk.validPass(session.getVehicle().getPlate(), at);
         covered = valid != null;
@@ -277,12 +278,13 @@ public class ExitDialog {
         String plate = session.getVehicle().getPlate();
         String ticket = String.valueOf(session.getTicketNumber());
         String manoeuvres = String.valueOf(result.getPlan().getManoeuvreCount());
+        String type = Texts.get("vehicle." + session.getVehicle().getType().name());
         String text;
         if (payment.getMethod() == Payment.Method.PASS) {
-            text = Texts.format("exit.done.pass", plate, ticket, manoeuvres);
+            text = Texts.format("exit.done.pass", plate, ticket, manoeuvres, type);
         } else {
             text = Texts.format("exit.done", plate, ticket, Texts.money(payment.getAmountCents()),
-                    Texts.get("payment." + payment.getMethod().name()), manoeuvres);
+                    Texts.get("payment." + payment.getMethod().name()), manoeuvres, type);
         }
         if (payment.getLostTicketCents() > 0) {
             text += Texts.format("exit.done.lost", Texts.money(payment.getLostTicketCents()));

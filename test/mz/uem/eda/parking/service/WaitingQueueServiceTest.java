@@ -11,7 +11,6 @@ import java.time.LocalDateTime;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import mz.uem.eda.parking.model.Customer;
 import mz.uem.eda.parking.model.Lane;
 import mz.uem.eda.parking.model.ParkingSession;
 import mz.uem.eda.parking.model.StayClass;
@@ -26,8 +25,6 @@ import mz.uem.eda.parking.structures.Queue;
 class WaitingQueueServiceTest {
 
     private static final LocalDateTime T0 = LocalDateTime.of(2026, 10, 20, 8, 0);
-    private static final Customer VIP = new Customer("Ana", null, true);
-    private static final Customer REGULAR = new Customer("Rui", null, false);
 
     private Lane lane;
     private Queue<Lane> lanes;
@@ -47,12 +44,12 @@ class WaitingQueueServiceTest {
     // ---- entrar na fila -------------------------------------------------
 
     @Test
-    void preferentialCustomersGoToThePreferentialQueue() {
+    void theDeskChoosesTheQueue() {
         WaitingQueueService waiting = service(new StrictPriority());
 
-        assertTrue(waiting.join(car("AAA001MC", VIP), 60, T0).isPreferential());
-        assertFalse(waiting.join(car("AAA002MC", REGULAR), 60, T0).isPreferential());
-        assertFalse(waiting.join(car("AAA003MC", null), 60, T0).isPreferential());
+        assertTrue(waiting.join(car("AAA001MC"), 60, T0, true).isPreferential());
+        assertFalse(waiting.join(car("AAA002MC"), 60, T0, false).isPreferential());
+        assertFalse(waiting.join(car("AAA003MC"), 60, T0).isPreferential());
 
         assertEquals(1, waiting.preferentialSize());
         assertEquals(2, waiting.normalSize());
@@ -61,26 +58,26 @@ class WaitingQueueServiceTest {
     @Test
     void sameCarCannotWaitTwice() {
         WaitingQueueService waiting = service(new StrictPriority());
-        waiting.join(car("AAA001MC", null), 60, T0);
+        waiting.join(car("AAA001MC"), 60, T0);
 
         assertThrows(IllegalStateException.class,
-                () -> waiting.join(car("aaa-001-mc", null), 60, T0));
+                () -> waiting.join(car("aaa-001-mc"), 60, T0));
     }
 
     @Test
     void parkedCarCannotWait() {
         WaitingQueueService waiting = service(new StrictPriority());
-        entry.enter(car("AAA001MC", null), 60, T0);
+        entry.enter(car("AAA001MC"), 60, T0);
 
         assertThrows(IllegalStateException.class,
-                () -> waiting.join(car("AAA001MC", null), 60, T0));
+                () -> waiting.join(car("AAA001MC"), 60, T0));
     }
 
     @Test
     void rejectsInvalidDuration() {
         WaitingQueueService waiting = service(new StrictPriority());
         assertThrows(IllegalArgumentException.class,
-                () -> waiting.join(car("AAA001MC", null), 0, T0));
+                () -> waiting.join(car("AAA001MC"), 0, T0));
     }
 
     // ---- atender --------------------------------------------------------
@@ -89,7 +86,7 @@ class WaitingQueueServiceTest {
     void nobodyEntersWhileTheParkIsFull() {
         WaitingQueueService waiting = service(new StrictPriority());
         fillThePark();
-        waiting.join(car("BBB001MC", null), 60, T0);
+        waiting.join(car("BBB001MC"), 60, T0);
 
         assertNull(waiting.admitNext(T0.plusMinutes(5)));
         assertEquals(1, waiting.normalSize());
@@ -99,8 +96,8 @@ class WaitingQueueServiceTest {
     void firstInTheQueueTakesTheFreedPlace() {
         WaitingQueueService waiting = service(new StrictPriority());
         fillThePark();
-        waiting.join(car("BBB001MC", null), 60, T0);
-        waiting.join(car("BBB002MC", null), 60, T0);
+        waiting.join(car("BBB001MC"), 60, T0);
+        waiting.join(car("BBB002MC"), 60, T0);
 
         exit.exitByPlate("AAA001MC", T0.plusHours(1));
         ParkingSession session = waiting.admitNext(T0.plusHours(1));
@@ -108,7 +105,7 @@ class WaitingQueueServiceTest {
         assertEquals("BBB001MC", session.getVehicle().getPlate());
         assertEquals(T0.plusHours(1), session.getEntryTime());
         assertEquals(1, waiting.normalSize());
-        assertTrue(entry.isParked(car("BBB001MC", null)));
+        assertTrue(entry.isParked(car("BBB001MC")));
     }
 
     @Test
@@ -119,8 +116,8 @@ class WaitingQueueServiceTest {
     @Test
     void strictPriorityServesPreferentialFirst() {
         WaitingQueueService waiting = service(new StrictPriority());
-        waiting.join(car("NNN001MC", REGULAR), 60, T0);
-        waiting.join(car("PPP001MC", VIP), 60, T0.plusMinutes(1));
+        waiting.join(car("NNN001MC"), 60, T0);
+        waiting.join(car("PPP001MC"), 60, T0.plusMinutes(1), true);
 
         assertEquals("PPP001MC", waiting.admitNext(T0.plusMinutes(2)).getVehicle().getPlate());
         assertEquals("NNN001MC", waiting.admitNext(T0.plusMinutes(2)).getVehicle().getPlate());
@@ -134,9 +131,9 @@ class WaitingQueueServiceTest {
         entry = new EntryService(lanes, new FirstWithSpace());
         WaitingQueueService waiting = new WaitingQueueService(lanes, entry, new RoundRobin(2));
         for (int i = 1; i <= 4; i++) {
-            waiting.join(car("PPP00" + i + "MC", VIP), 60, T0);
+            waiting.join(car("PPP00" + i + "MC"), 60, T0, true);
         }
-        waiting.join(car("NNN001MC", REGULAR), 60, T0);
+        waiting.join(car("NNN001MC"), 60, T0);
 
         assertEquals("PPP001MC", plateOf(waiting.admitNext(T0)));
         assertEquals("PPP002MC", plateOf(waiting.admitNext(T0)));
@@ -147,8 +144,8 @@ class WaitingQueueServiceTest {
     @Test
     void contentsAreReadOnlyInArrivalOrder() {
         WaitingQueueService waiting = service(new StrictPriority());
-        waiting.join(car("AAA001MC", null), 60, T0);
-        waiting.join(car("AAA002MC", null), 60, T0);
+        waiting.join(car("AAA001MC"), 60, T0);
+        waiting.join(car("AAA002MC"), 60, T0);
 
         StringBuilder plates = new StringBuilder();
         for (WaitingCar car : waiting.normalContents()) {
@@ -158,28 +155,18 @@ class WaitingQueueServiceTest {
         assertEquals(2, waiting.normalSize());
     }
 
-    // ---- cliente preferencial marcado ao balcão e desfazer ---------------
-
-    @Test
-    void theDeskCanMarkACustomerAsPreferential() {
-        WaitingQueueService waiting = service(new StrictPriority());
-
-        assertTrue(waiting.join(car("AAA001MC", null), 60, T0, true).isPreferential());
-        assertFalse(waiting.join(car("AAA002MC", VIP), 60, T0, false).isPreferential());
-        assertEquals(1, waiting.preferentialSize());
-        assertEquals(1, waiting.normalSize());
-    }
+    // ---- desfazer a ida para a fila ---------------------------------------
 
     @Test
     void removeTakesACarOutOfTheMiddleKeepingTheOrder() {
         WaitingQueueService waiting = service(new StrictPriority());
-        waiting.join(car("AAA001MC", null), 60, T0);
-        waiting.join(car("AAA002MC", null), 60, T0);
-        waiting.join(car("AAA003MC", null), 60, T0);
+        waiting.join(car("AAA001MC"), 60, T0);
+        waiting.join(car("AAA002MC"), 60, T0);
+        waiting.join(car("AAA003MC"), 60, T0);
 
-        assertTrue(waiting.remove(car("AAA002MC", null)));
-        assertFalse(waiting.remove(car("AAA002MC", null)));
-        assertFalse(waiting.isWaiting(car("AAA002MC", null)));
+        assertTrue(waiting.remove(car("AAA002MC")));
+        assertFalse(waiting.remove(car("AAA002MC")));
+        assertFalse(waiting.isWaiting(car("AAA002MC")));
 
         StringBuilder order = new StringBuilder();
         for (WaitingCar car : waiting.normalContents()) {
@@ -195,12 +182,12 @@ class WaitingQueueServiceTest {
     }
 
     private void fillThePark() {
-        entry.enter(car("AAA001MC", null), 60, T0);
-        entry.enter(car("AAA002MC", null), 60, T0);
+        entry.enter(car("AAA001MC"), 60, T0);
+        entry.enter(car("AAA002MC"), 60, T0);
     }
 
-    private static Vehicle car(String plate, Customer customer) {
-        return new Vehicle(plate, Vehicle.Type.CAR, customer);
+    private static Vehicle car(String plate) {
+        return new Vehicle(plate, Vehicle.Type.CAR);
     }
 
     private static String plateOf(ParkingSession session) {

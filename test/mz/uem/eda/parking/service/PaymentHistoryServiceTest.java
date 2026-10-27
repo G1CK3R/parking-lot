@@ -90,7 +90,7 @@ class PaymentHistoryServiceTest {
     }
 
     private static ParkingSession session(int ticket) {
-        Vehicle vehicle = new Vehicle("AAA00" + ticket + "MC", Vehicle.Type.CAR, null);
+        Vehicle vehicle = new Vehicle("AAA00" + ticket + "MC", Vehicle.Type.CAR);
         return new ParkingSession(ticket, vehicle, "L01", StayClass.FULL_DAY, 120, T0);
     }
 }

@@ -93,6 +93,19 @@ class ParkingDeskTest {
     }
 
     @Test
+    void theVehicleTypeIsSavedAndTheLastOneWins() throws SQLException {
+        ParkingDesk desk = adminDesk();
+        desk.enter("AAA001MC", Vehicle.Type.VAN, 60, T0);
+        desk.exit(desk.findForExit("AAA001MC"), Payment.Method.CASH, T0.plusHours(1));
+        desk.enter("AAA001MC", Vehicle.Type.MOTORCYCLE, 60, T0.plusHours(2));
+
+        ParkingDesk reopened = open();
+        reopened.login("admin", ADMIN_PASSWORD, T0);
+        assertEquals(Vehicle.Type.MOTORCYCLE, reopened.findForExit("AAA001MC").getVehicle().getType());
+        assertEquals(1, TestDatabase.count(db, "SELECT COUNT(*) FROM vehicles"));
+    }
+
+    @Test
     void findForExitAcceptsPlateOrTicket() throws SQLException {
         ParkingDesk desk = adminDesk();
         ParkingSession session = desk.enter("AAA001MC", Vehicle.Type.CAR, 60, T0);

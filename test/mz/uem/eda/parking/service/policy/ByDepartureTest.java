@@ -91,13 +91,13 @@ class ByDepartureTest {
         Lane a = Lane.parking("A", 10, StayClass.FULL_DAY);
         Lane b = Lane.parking("B", 10, StayClass.FULL_DAY);
         EntryService entry = new EntryService(lanes(a, b), POLICY);
-        entry.enter(new Vehicle("AAA001MC", Vehicle.Type.CAR, null), 9 * 60, T0);      // A, sai às 17h
-        entry.enter(new Vehicle("AAA002MC", Vehicle.Type.CAR, null), 10 * 60, T0);     // B: não bloqueia A
-        ParkingSession third = entry.enter(new Vehicle("AAA003MC", Vehicle.Type.CAR, null), 8 * 60, T0);
+        entry.enter(new Vehicle("AAA001MC", Vehicle.Type.CAR), 9 * 60, T0);      // A, sai às 17h
+        entry.enter(new Vehicle("AAA002MC", Vehicle.Type.CAR), 10 * 60, T0);     // B: não bloqueia A
+        ParkingSession third = entry.enter(new Vehicle("AAA003MC", Vehicle.Type.CAR), 8 * 60, T0);
 
         // Sai às 16h: o encaixe mais justo é A (17h), não B (18h).
         assertEquals("A", third.getLaneCode());
-        assertEquals("B", entry.enter(new Vehicle("AAA004MC", Vehicle.Type.CAR, null), 9 * 60 + 30, T0)
+        assertEquals("B", entry.enter(new Vehicle("AAA004MC", Vehicle.Type.CAR), 9 * 60 + 30, T0)
                 .getLaneCode());
     }
 
@@ -105,7 +105,7 @@ class ByDepartureTest {
 
     /** Estaciona um carro que entra às 8h00 e diz que fica {@code minutes}. */
     private void park(Lane lane, int minutes) {
-        Vehicle vehicle = new Vehicle("CAR" + ticket, Vehicle.Type.CAR, null);
+        Vehicle vehicle = new Vehicle("CAR" + ticket, Vehicle.Type.CAR);
         lane.asStack().push(new ParkingSession(ticket, vehicle, lane.getCode(), EntryService.classify(minutes),
                 minutes, T0));
         ticket++;

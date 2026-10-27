@@ -40,7 +40,7 @@ import mz.uem.eda.parking.ui.theme.Theme;
 
 /**
  * O histórico das estadias, só para o administrador (RF20): cada estadia
- * com a entrada, a saída, o valor, a multa, o método e quem cobrou, com
+ * com o tipo de viatura, a entrada, a saída, o valor, a multa, o método e quem cobrou, com
  * filtros por período de entrada, por matrícula, por operador e por estado
  * (ainda no parque ou já saiu).
  *
@@ -65,10 +65,10 @@ public final class HistoryDialog {
     private final JCheckBox inPark = new JCheckBox(Texts.get("history.inPark"), true);
     private final JCheckBox left = new JCheckBox(Texts.get("history.left"), true);
     private final DefaultTableModel table = ReportParts.model("report.column.ticket", "report.column.plate",
-            "report.column.lane", "report.column.entry", "report.column.exit", "report.column.stay",
+            "report.column.type", "report.column.lane", "report.column.entry", "report.column.exit", "report.column.stay",
             "report.column.amount", "report.column.fee", "report.column.method", "report.column.operator",
             "report.column.state");
-    private final JScrollPane tableScroll = ReportParts.table(table, 0, 5, 6, 7);
+    private final JScrollPane tableScroll = ReportParts.table(table, 0, 6, 7, 8);
     private final JLabel note = ReportParts.note();
     private Iterable<HistoryEntry> entries;
     private LocalDate[] days;
@@ -117,7 +117,7 @@ public final class HistoryDialog {
                 dialog.dispose();
             }
         });
-        ReportParts.widths(tableScroll, 55, 100, 50, 120, 120, 90, 100, 80, 90, 90, 80);
+        ReportParts.widths(tableScroll, 50, 95, 75, 45, 115, 115, 85, 100, 80, 85, 80, 75);
 
         JPanel first = new JPanel(new FlowLayout(FlowLayout.LEFT, Theme.GAP, 0));
         first.add(new JLabel(Texts.get("history.period")));
@@ -151,7 +151,7 @@ public final class HistoryDialog {
 
         dialog.setContentPane(content);
         dialog.setDefaultCloseOperation(JDialog.DISPOSE_ON_CLOSE);
-        dialog.setSize(1180, 600);
+        dialog.setSize(1220, 600);
         dialog.setLocationRelativeTo(owner);
         load();
     }
@@ -189,7 +189,7 @@ public final class HistoryDialog {
         LocalDateTime end = entry.isInPark() ? now : session.getExitTime();
         long stayed = Math.max(0, Duration.between(session.getEntryTime(), end).toMinutes());
         return new Object[] { String.valueOf(session.getTicketNumber()), session.getVehicle().getPlate(),
-            session.getLaneCode(), session.getEntryTime().format(ReportParts.DATE_TIME),
+            Texts.get("vehicle." + session.getVehicle().getType().name()), session.getLaneCode(), session.getEntryTime().format(ReportParts.DATE_TIME),
             entry.isInPark() ? "" : session.getExitTime().format(ReportParts.DATE_TIME), Texts.duration(stayed),
             payment == null ? "" : Texts.money(payment.getAmountCents()),
             payment == null || payment.getLostTicketCents() == 0 ? ""
@@ -251,7 +251,7 @@ public final class HistoryDialog {
             minutes = String.valueOf(Duration.between(session.getEntryTime(), session.getExitTime()).toMinutes());
         }
         String[] fields = { String.valueOf(session.getTicketNumber()), session.getVehicle().getPlate(),
-            session.getLaneCode(), session.getEntryTime().format(ReportParts.DATE_TIME), exit, minutes,
+            Texts.get("vehicle." + session.getVehicle().getType().name()), session.getLaneCode(), session.getEntryTime().format(ReportParts.DATE_TIME), exit, minutes,
             payment == null ? "" : Texts.amount(payment.getAmountCents()),
             payment == null ? "" : Texts.amount(payment.getLostTicketCents()),
             payment == null ? "" : Texts.get("payment." + payment.getMethod().name()),
