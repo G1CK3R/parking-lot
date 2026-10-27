@@ -21,8 +21,11 @@ import java.sql.Statement;
  * ficheiro não existir ou a base não responder, o teste é <b>saltado</b>
  * (não falha): quem não tem o MySQL ligado continua a ver os outros testes
  * verdes.
+ *
+ * <p>É pública porque os testes da {@code ParkingDesk}, no pacote
+ * {@code service}, também precisam de uma base verdadeira.
  */
-final class TestDatabase {
+public final class TestDatabase {
 
     private static final String DB = "parking_lot";
     private static final String TEST_DB = "parking_lot_test";
@@ -34,7 +37,7 @@ final class TestDatabase {
      * Recria a base de teste e devolve uma fábrica de ligações para ela.
      * Salta o teste se não houver base de dados disponível.
      */
-    static ConnectionFactory fresh() {
+    public static ConnectionFactory fresh() {
         ConnectionFactory configured;
         try {
             configured = ConnectionFactory.fromConfigFile();
@@ -60,7 +63,7 @@ final class TestDatabase {
     }
 
     /** Uma contagem simples, só para os testes verificarem o que ficou gravado. */
-    static int count(ConnectionFactory connections, String sql) throws SQLException {
+    public static int count(ConnectionFactory connections, String sql) throws SQLException {
         try (Connection c = connections.open();
                 Statement st = c.createStatement();
                 ResultSet rs = st.executeQuery(sql)) {
