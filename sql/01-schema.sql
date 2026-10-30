@@ -176,11 +176,20 @@ CREATE TABLE audit_log (
     PRIMARY KEY (id)
 ) ENGINE = InnoDB;
 
--- Estado global do parque numa única linha (id = 1): por agora, o número do
--- próximo talão, para a numeração continuar depois de reabrir.
+-- Estado global do parque numa única linha (id = 1): o número do próximo
+-- talão, para a numeração continuar depois de reabrir, e as políticas que o
+-- administrador escolheu: a de colocação, a de atendimento das filas de
+-- espera e, para a rotação, quantos preferenciais seguidos antes de um
+-- normal. Os valores por omissão são os do programa desde 27 Out: colocação
+-- pela hora de saída e rotação 3:1. Uma cópia de segurança antiga, sem estas
+-- colunas, repõe-se com eles.
 CREATE TABLE park_state (
-    id              TINYINT NOT NULL,
-    next_ticket_no  INT     NOT NULL,
+    id                  TINYINT     NOT NULL,
+    next_ticket_no      INT         NOT NULL,
+    placement_policy    VARCHAR(20) NOT NULL DEFAULT 'BY_DEPARTURE',
+    service_policy      VARCHAR(20) NOT NULL DEFAULT 'ROUND_ROBIN',
+    preferential_turns  INT         NOT NULL DEFAULT 3,
     PRIMARY KEY (id),
-    CHECK (id = 1)
+    CHECK (id = 1),
+    CHECK (preferential_turns BETWEEN 1 AND 10)
 ) ENGINE = InnoDB;

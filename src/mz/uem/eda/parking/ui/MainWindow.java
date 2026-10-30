@@ -37,6 +37,7 @@ import mz.uem.eda.parking.service.views.Operation;
 import mz.uem.eda.parking.ui.dialogs.admin.AuditDialog;
 import mz.uem.eda.parking.ui.dialogs.admin.BackupActions;
 import mz.uem.eda.parking.ui.dialogs.admin.HistoryDialog;
+import mz.uem.eda.parking.ui.dialogs.admin.PoliciesDialog;
 import mz.uem.eda.parking.ui.dialogs.admin.ReportsDialog;
 import mz.uem.eda.parking.ui.dialogs.admin.SimulationDialog;
 import mz.uem.eda.parking.ui.dialogs.admin.TariffDialog;
@@ -86,7 +87,7 @@ import mz.uem.eda.parking.ui.theme.Theme;
  * animação a decorrer, para não mudar o parque por baixo do operador.
  *
  * <p>O menu Sessão tem, para todos, a mudança da própria palavra-passe. O
- * menu Administração (utilizadores, tarifa, relatórios, histórico,
+ * menu Administração (utilizadores, tarifa, políticas, relatórios, histórico,
  * auditoria, simulação, cópia de segurança e restauro) só existe na janela
  * de um administrador: a janela constrói-se de novo a cada login, por isso
  * um operador nunca o vê. A {@code ParkingDesk} volta a recusar estas
@@ -115,6 +116,7 @@ public final class MainWindow {
     private final JLabel userStatus = new JLabel();
     private final JLabel occupancyStatus = new JLabel();
     private final JLabel tariffStatus = new JLabel();
+    private final JLabel policiesStatus = new JLabel();
     private final JLabel reservationStatus = new JLabel();
     private final Timer waitingClock;
     /** Quando começou o turno de quem está na sessão: a hora do login. */
@@ -202,6 +204,8 @@ public final class MainWindow {
                 String.valueOf(desk.activeReservationCount())));
         tariffStatus.setText(Texts.format("status.tariff",
                 Texts.money(desk.getTariff().getHourlyRateCents())));
+        String[] policies = PoliciesDialog.names(desk.getPolicies());
+        policiesStatus.setText(Texts.format("status.policies", policies[0], policies[1]));
     }
 
     private JMenuBar menuBar() {
@@ -335,7 +339,7 @@ public final class MainWindow {
     }
 
     /**
-     * O menu só do administrador: utilizadores, tarifa, relatórios,
+     * O menu só do administrador: utilizadores, tarifa, políticas, relatórios,
      * histórico, auditoria, simulação, cópia de segurança e restauro.
      */
     private JMenu adminMenu() {
@@ -351,6 +355,16 @@ public final class MainWindow {
             @Override
             public void actionPerformed(ActionEvent e) {
                 if (TariffDialog.ask(frame, desk)) {
+                    refreshStatus();
+                }
+            }
+        });
+
+        JMenuItem policies = new JMenuItem(Texts.get("menu.admin.policies"));
+        policies.addActionListener(new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                if (PoliciesDialog.ask(frame, desk)) {
                     refreshStatus();
                 }
             }
@@ -407,6 +421,7 @@ public final class MainWindow {
         JMenu admin = new JMenu(Texts.get("menu.admin"));
         admin.add(users);
         admin.add(tariff);
+        admin.add(policies);
         admin.addSeparator();
         admin.add(reports);
         admin.add(history);
@@ -633,6 +648,7 @@ public final class MainWindow {
         right.add(occupancyStatus);
         right.add(reservationStatus);
         right.add(tariffStatus);
+        right.add(policiesStatus);
 
         JPanel bar = new JPanel(new BorderLayout());
         bar.setBorder(BorderFactory.createCompoundBorder(

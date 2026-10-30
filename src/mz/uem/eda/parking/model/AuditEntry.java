@@ -42,6 +42,8 @@ public class AuditEntry {
         USER_REMOVED,
         /** Mudou a tarifa. Valores: valor por hora, tecto diário, noite, desconto, multa, avença. */
         TARIFF_CHANGED,
+        /** Mudou as políticas. Valores: colocação, atendimento, preferenciais seguidos. */
+        POLICIES_CHANGED,
         /** Saída sem talão, com multa. Valores: matrícula, talão, multa. */
         LOST_TICKET,
         /** Vendeu uma avença. Valores: matrícula, mês, valor. */

@@ -10,20 +10,19 @@ import javax.swing.SwingUtilities;
 
 import mz.uem.eda.parking.persistence.ConnectionFactory;
 import mz.uem.eda.parking.service.ParkingDesk;
-import mz.uem.eda.parking.service.policy.ByDeparture;
-import mz.uem.eda.parking.service.policy.RoundRobin;
 import mz.uem.eda.parking.ui.MainWindow;
 import mz.uem.eda.parking.ui.Texts;
 import mz.uem.eda.parking.ui.theme.Theme;
 
 /**
  * Arranca a aplicação. É o único sítio que conhece todas as peças: lê a
- * configuração, abre o parque com as políticas escolhidas e entrega-o à
- * interface.
+ * configuração, abre o parque e entrega-o à interface.
  *
- * <p>Políticas: {@link ByDeparture}, a colocação com menos manobras na
- * simulação (decidido a 27 Out), e {@link RoundRobin} com três preferenciais
- * por cada normal, a mesma rotação que o simulador compara.
+ * <p>As políticas de colocação e de atendimento não estão aqui: são as que o
+ * administrador escolheu, gravadas na base (Administração &gt; Políticas do
+ * parque). Numa base nova são a colocação pela hora de saída, a com menos
+ * manobras na simulação (decidido a 27 Out), e a rotação com três
+ * preferenciais por cada normal.
  *
  * <p>Se a base de dados não abrir, mostra o motivo numa mensagem e fecha. O
  * motivo distingue os casos que a equipa vai encontrar ao montar o projecto:
@@ -31,9 +30,6 @@ import mz.uem.eda.parking.ui.theme.Theme;
  * estão erradas, a base não foi criada, ou o esquema está desactualizado.
  */
 public class Main {
-
-    /** Quantos carros preferenciais seguidos antes de um normal. */
-    private static final int PREFERENTIAL_TURNS = 3;
 
     /** Códigos de erro do MySQL que valem uma mensagem própria. */
     private static final int ACCESS_DENIED = 1045;
@@ -73,8 +69,7 @@ public class Main {
 
         ParkingDesk desk;
         try {
-            desk = new ParkingDesk(connections, new ByDeparture(),
-                    new RoundRobin(PREFERENTIAL_TURNS), LocalDateTime.now());
+            desk = new ParkingDesk(connections, LocalDateTime.now());
         } catch (SQLException e) {
             fail(reason(e, connections.getUrl()));
             return;

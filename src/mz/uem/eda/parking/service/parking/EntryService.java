@@ -16,7 +16,7 @@ public class EntryService {
     public static final int FULL_DAY_MINUTES =  24 * 60;
 
     private final Iterable<Lane> lanes;
-    private final PlacementPolicy policy;
+    private PlacementPolicy policy;
     private int nextTicketNumber;
 
     public EntryService(Iterable<Lane> lanes, PlacementPolicy policy) {
@@ -71,6 +71,18 @@ public class EntryService {
         }
         return  false;
      }
+
+    /**
+     * Troca a política de colocação (o administrador mudou-a). Vale a partir
+     * da próxima entrada; os carros que já estão no parque não mudam de
+     * baia.
+     *
+     * @param policy a política nova
+     * @throws NullPointerException se {@code policy} for {@code null}
+     */
+    public void setPolicy(PlacementPolicy policy) {
+        this.policy = Objects.requireNonNull(policy, "policy não pode ser null");
+    }
 
      public int getNextTicketNumber() {
         return nextTicketNumber;

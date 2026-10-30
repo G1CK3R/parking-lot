@@ -11,6 +11,7 @@ import mz.uem.eda.parking.model.AuditEntry;
 import mz.uem.eda.parking.model.Lane;
 import mz.uem.eda.parking.model.MonthlyPass;
 import mz.uem.eda.parking.model.Move;
+import mz.uem.eda.parking.model.ParkPolicies;
 import mz.uem.eda.parking.model.ParkingSession;
 import mz.uem.eda.parking.model.Payment;
 import mz.uem.eda.parking.model.Reservation;
@@ -23,6 +24,7 @@ import mz.uem.eda.parking.persistence.BackupRepository;
 import mz.uem.eda.parking.persistence.ConnectionFactory;
 import mz.uem.eda.parking.persistence.LaneRepository;
 import mz.uem.eda.parking.persistence.MonthlyPassRepository;
+import mz.uem.eda.parking.persistence.PolicyRepository;
 import mz.uem.eda.parking.persistence.ReservationRepository;
 import mz.uem.eda.parking.persistence.SessionRepository;
 import mz.uem.eda.parking.persistence.TariffRepository;
@@ -38,8 +40,7 @@ import mz.uem.eda.parking.service.parking.ExitService;
 import mz.uem.eda.parking.service.parking.ReservationService;
 import mz.uem.eda.parking.service.parking.WaitingCar;
 import mz.uem.eda.parking.service.parking.WaitingQueueService;
-import mz.uem.eda.parking.service.policy.PlacementPolicy;
-import mz.uem.eda.parking.service.policy.ServicePolicy;
+import mz.uem.eda.parking.service.policy.Policies;
 import mz.uem.eda.parking.service.reports.CashClose;
 import mz.uem.eda.parking.service.reports.HistoryEntry;
 import mz.uem.eda.parking.service.reports.ReportService;
@@ -90,10 +91,15 @@ import mz.uem.eda.parking.structures.Stack;
  * quando um carro entra da fila de espera.
  *
  * <p><b>Auditoria (RF23).</b> As operações sensíveis (logins, utilizadores,
- * tarifa, multas, avenças, cancelamentos, desfazer, cópias de segurança)
+ * tarifa, políticas, multas, avenças, cancelamentos, desfazer, cópias de segurança)
  * ficam registadas depois de gravadas. A hora do registo é a da operação
  * quando o método a recebe; nos outros (gestão de utilizadores, por
  * exemplo), é a do relógio.
+ *
+ * <p><b>Políticas.</b> A colocação e o atendimento das filas de espera são
+ * os que o administrador escolheu ({@link ParkPolicies}), gravados na base.
+ * Trocá-los ({@link #changePolicies}) vale a partir da operação seguinte,
+ * sem reabrir o programa.
  *
  * <p>Pensada para um só posto de atendimento: guarda um utilizador
  * autenticado de cada vez.
@@ -124,6 +130,7 @@ public class ParkingDesk {
     private final TariffRepository tariffRepository;
     private final ReservationRepository reservationRepository;
     private final MonthlyPassRepository passRepository;
+    private final PolicyRepository policyRepository;
     private final AuditRepository auditRepository;
     private final BackupRepository backupRepository;
 
@@ -131,6 +138,21 @@ public class ParkingDesk {
     /** As operações que se podem desfazer, a última no topo. */
     private final Stack<Operation> operations = new LinkedStack<>();
     private User currentUser;
+    private ParkPolicies policies;
+
+    /**
+     * Abre o parque com as políticas gravadas na base, as que o
+     * administrador escolheu da última vez. É o que o {@code Main} usa.
+     *
+     * @param connections a ligação à base de dados
+     * @param now a hora de abertura, para expirar as reservas que já
+     *        passaram da tolerância
+     * @throws SQLException se a leitura da base falhar
+     * @throws NullPointerException se algum argumento for {@code null}
+     */
+    public ParkingDesk(ConnectionFactory connections, LocalDateTime now) throws SQLException {
+        this(connections, new PolicyRepository(connections).load(), now);
+    }
 
     /**
      * Abre o parque: carrega da base as baias com os carros nas mesmas
@@ -138,24 +160,26 @@ public class ParkingDesk {
      * activas, os utilizadores e o histórico dos pagamentos, e liga os
      * serviços entre si.
      *
+     * <p>Usa as políticas dadas, e não as gravadas: serve aos testes, que
+     * precisam de saber com que políticas trabalham. Não grava nada; se o
+     * administrador mudar as políticas depois, essas sim ficam gravadas.
+     *
      * <p>As filas de espera começam vazias: não são gravadas, porque quem
      * estava à espera quando o programa fechou já não está à porta.
      *
      * @param connections a ligação à base de dados
-     * @param placement a política que escolhe a baia de cada carro
-     * @param service a política que escolhe de que fila de espera sai o
-     *        próximo carro
+     * @param policies as políticas de colocação e de atendimento
      * @param now a hora de abertura, para expirar as reservas que já
      *        passaram da tolerância
      * @throws SQLException se a leitura da base falhar
      * @throws NullPointerException se algum argumento for {@code null}
      */
-    public ParkingDesk(ConnectionFactory connections, PlacementPolicy placement,
-            ServicePolicy service, LocalDateTime now) throws SQLException {
+    public ParkingDesk(ConnectionFactory connections, ParkPolicies policies, LocalDateTime now)
+            throws SQLException {
         Objects.requireNonNull(connections, "connections não pode ser null");
-        Objects.requireNonNull(placement, "placement não pode ser null");
-        Objects.requireNonNull(service, "service não pode ser null");
+        Objects.requireNonNull(policies, "policies não pode ser null");
         Objects.requireNonNull(now, "now não pode ser null");
+        this.policies = policies;
 
         LaneRepository laneRepository = new LaneRepository(connections);
         this.sessionRepository = new SessionRepository(connections, laneRepository);
@@ -163,6 +187,7 @@ public class ParkingDesk {
         this.tariffRepository = new TariffRepository(connections);
         this.reservationRepository = new ReservationRepository(connections);
         this.passRepository = new MonthlyPassRepository(connections);
+        this.policyRepository = new PolicyRepository(connections);
         this.auditRepository = new AuditRepository(connections);
         this.backupRepository = new BackupRepository(connections);
 
@@ -172,7 +197,7 @@ public class ParkingDesk {
             laneViews.enqueue(new LaneView(lane));
         }
 
-        this.entryService = new EntryService(lanes, placement);
+        this.entryService = new EntryService(lanes, Policies.placement(policies));
         entryService.restoreNextTicketNumber(sessionRepository.loadNextTicketNumber());
         this.exitService = new ExitService(lanes);
         this.billingService = new BillingService(tariffRepository.loadActive());
@@ -182,7 +207,7 @@ public class ParkingDesk {
         for (Reservation reservation : reservationRepository.loadActive(now)) {
             reservationService.load(reservation);
         }
-        this.waitingService = new WaitingQueueService(lanes, entryService, service,
+        this.waitingService = new WaitingQueueService(lanes, entryService, Policies.service(policies),
                 reservationService);
 
         this.authService = new AuthService(new PasswordHasher());
@@ -911,6 +936,55 @@ public class ParkingDesk {
         record(now, AuditEntry.Action.TARIFF_CHANGED, tariff.getHourlyRateCents(), tariff.getDailyCapCents(),
                 tariff.getNightRateCents(), tariff.getWeekendDiscountPercent(), tariff.getLostTicketCents(),
                 tariff.getMonthlyPassCents());
+    }
+
+    /**
+     * @return as políticas em vigor: colocação, atendimento e o k da rotação
+     */
+    public ParkPolicies getPolicies() {
+        return policies;
+    }
+
+    /**
+     * Troca as políticas do parque. Grava primeiro e só depois as aplica,
+     * como a tarifa: se a gravação falhar, fica tudo como estava.
+     *
+     * <p>A colocação nova vale a partir da próxima entrada; os carros que já
+     * estão no parque não mudam de baia, e todas as políticas sabem lidar
+     * com baias montadas por outra (só olham para o topo e para o espaço
+     * livre). O atendimento novo vale a partir do próximo carro que sai da
+     * fila de espera; os carros à espera ficam onde estão.
+     *
+     * <p>Só se troca a parte que mudou. Se só a colocação mudar, a rotação
+     * continua a contar de onde ia; se o atendimento mudar, começa do zero.
+     *
+     * @param chosen as políticas novas
+     * @param now a hora da troca, para o registo de auditoria
+     * @return {@code false} se forem iguais às que estão em vigor (nada é
+     *         gravado nem registado)
+     * @throws SecurityException se quem está autenticado não for
+     *         administrador
+     * @throws SQLException se a gravação falhar
+     * @throws NullPointerException se algum argumento for {@code null}
+     */
+    public boolean changePolicies(ParkPolicies chosen, LocalDateTime now) throws SQLException {
+        AuthService.requireAdmin(currentUser);
+        Objects.requireNonNull(chosen, "chosen não pode ser null");
+        Objects.requireNonNull(now, "now não pode ser null");
+        if (chosen.sameAs(policies)) {
+            return false;
+        }
+        policyRepository.save(chosen);
+        if (chosen.getPlacement() != policies.getPlacement()) {
+            entryService.setPolicy(Policies.placement(chosen));
+        }
+        if (!chosen.sameService(policies)) {
+            waitingService.setPolicy(Policies.service(chosen));
+        }
+        policies = chosen;
+        record(now, AuditEntry.Action.POLICIES_CHANGED, chosen.getPlacement(), chosen.getService(),
+                chosen.getPreferentialTurns());
+        return true;
     }
 
     /**

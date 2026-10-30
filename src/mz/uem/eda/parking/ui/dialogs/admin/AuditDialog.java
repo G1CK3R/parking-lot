@@ -172,6 +172,10 @@ public final class AuditDialog {
                 values[4] = formatMoney(values[4]);
                 values[5] = formatMoney(values[5]);
                 break;
+            case POLICIES_CHANGED:
+                values[0] = Texts.get("policies.placement." + values[0]);
+                values[1] = Texts.format("policies.service." + values[1], values[2]);
+                break;
             case LOST_TICKET:
                 values[2] = formatMoney(values[2]);
                 break;

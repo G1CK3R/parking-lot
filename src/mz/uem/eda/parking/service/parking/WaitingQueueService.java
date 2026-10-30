@@ -37,7 +37,7 @@ public class WaitingQueueService {
 
     private final Iterable<Lane> lanes;
     private final EntryService entryService;
-    private final ServicePolicy policy;
+    private ServicePolicy policy;
     private final ReservationService reservations;
     private final Queue<WaitingCar> preferential;
     private final Queue<WaitingCar> normal;
@@ -198,6 +198,18 @@ public class WaitingQueueService {
             }
         }
         return removed;
+    }
+
+    /**
+     * Troca a política de atendimento (o administrador mudou-a). Vale a
+     * partir do próximo carro atendido. Os carros à espera ficam nas filas
+     * onde estão e pela mesma ordem; só muda a regra que escolhe a fila.
+     *
+     * @param policy a política nova
+     * @throws NullPointerException se {@code policy} for {@code null}
+     */
+    public void setPolicy(ServicePolicy policy) {
+        this.policy = Objects.requireNonNull(policy, "policy não pode ser null");
     }
 
     /** @return quantos carros esperam na fila preferencial; O(1) */

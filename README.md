@@ -68,6 +68,7 @@ compara-as por simulação.
 | Sessão | Mudar a própria palavra-passe; terminar sessão | RF03 |
 | Administração → Utilizadores | Criar operadores e administradores, repor palavras-passe, desbloquear contas, retirar utilizadores | RF03, RF22 |
 | Administração → Tarifa | Tolerância, fracção, valor por hora, tecto diário, valor de noite, desconto ao fim-de-semana, multa e avença, com exemplos antes de gravar | RF13, RF16, RF17 |
+| Administração → Políticas do parque | Escolher a política de colocação e a de atendimento (e o k da rotação), com uma frase sobre cada uma; vale logo, sem reabrir; fica na auditoria | — |
 | Administração → Relatórios | Receita por dia, por operador e por método; lista de pagamentos em três ordens; avenças vendidas; exportar CSV | RF18, RF20 |
 | Administração → Histórico de estadias | Todas as estadias com filtros (período, matrícula, operador, no parque ou já saíram); exportar CSV; imprimir ou gravar em PDF | RF20 |
 | Administração → Registo de auditoria | Quem fez cada operação sensível e quando, com filtros por período, utilizador e operação | RF23 |
@@ -157,10 +158,14 @@ dia e uma de noite. Os valores guardam-se em centavos, num `long`, para as conta
 | `FirstWithSpace` | A primeira baia com espaço. Linha de base |
 | `LeastOccupied` | A baia com menos carros |
 | `ByStayClass` | A baia da sua classe, empilhando só sobre quem sai depois (por classe) |
-| `ByDeparture` | A mesma regra, mas com a **hora de saída declarada**: encaixe mais justo, depois baia vazia, e em último recurso a baia cujo topo sai mais tarde. **É a que o programa usa** |
+| `ByDeparture` | A mesma regra, mas com a **hora de saída declarada**: encaixe mais justo, depois baia vazia, e em último recurso a baia cujo topo sai mais tarde. **É a que o programa usa por omissão** |
 
 **Atendimento** (quem sai das filas de espera): `StrictPriority` (preferencial sempre primeiro) e
-`RoundRobin(3)` (três preferenciais por cada normal; o programa usa esta).
+`RoundRobin(3)` (três preferenciais por cada normal; o programa usa esta por omissão).
+
+O administrador troca as duas em **Administração → Políticas do parque**. A escolha fica gravada em
+`park_state` e vale a partir da operação seguinte: os carros que já estão no parque não mudam de baia, e
+os que esperam continuam na fila. Numa base nova ficam a `ByDeparture` e a `RoundRobin(3)`.
 
 **Resultados** (`docs/measurements/simulation.csv`, 20 dias por combinação, 260 carros por dia, 15% de
 preferenciais, erro de ±20% na duração declarada), manobras por saída:
@@ -439,7 +444,7 @@ parking-lot/
 │   ├── diagrams/                diagramas
 │   └── mockups/                 maquetes
 ├── src/mz/uem/eda/parking/
-│   ├── Main.java                arranque: configuração, políticas, login
+│   ├── Main.java                arranque: configuração, abrir o parque, login
 │   ├── structures/              Stack, Queue e implementações; excepções
 │   ├── algorithms/              radix sort, duas pilhas, fusão, busca sequencial
 │   ├── model/                   Lane, ParkingSession, Vehicle, Tariff, Payment, MonthlyPass, Reservation, User, AuditEntry, Move, RetrievalPlan…

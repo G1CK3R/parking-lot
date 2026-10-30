@@ -50,5 +50,7 @@ INSERT INTO tariffs (free_minutes, fraction_minutes, hourly_rate_cents, daily_ca
                      active, created_at)
 VALUES (15, 15, 6000, 40000, 3000, 20, 50000, 350000, TRUE, NOW());
 
--- O primeiro talão é o número 1.
+-- O primeiro talão é o número 1. As políticas ficam com os valores por
+-- omissão da tabela (pela hora de saída, rotação 3:1); o administrador
+-- muda-as em Administração > Políticas do parque.
 INSERT INTO park_state (id, next_ticket_no) VALUES (1, 1);
