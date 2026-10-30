@@ -25,7 +25,10 @@ public class EntryService {
         this.nextTicketNumber = 1;
     }
 
-     /** ADR-004: até 2 h curta duração, até 24 h jornada completa, depois permanência longa. */
+     /**
+      * ADR-004: até 2 h curta duração, até 24 h jornada completa, depois permanência longa.
+      * @complexity O(1)
+      */
     public static StayClass classify(int estimatedMinutes) {
         if(estimatedMinutes <= 0) {
             throw new IllegalArgumentException("estimatedMinutes deve ser positivo: " + estimatedMinutes);
@@ -40,6 +43,18 @@ public class EntryService {
 
     }
 
+    /**
+     * Faz entrar um carro na baia que a política escolher, com um talão novo.
+     *
+     * @param vehicle a viatura
+     * @param estimatedMinutes a duração declarada, em minutos
+     * @param entryTime a hora de entrada
+     * @return a sessão do carro, ou {@code null} se nenhuma baia o puder receber
+     * @throws IllegalArgumentException se a duração não for positiva
+     * @throws IllegalStateException se o carro já estiver estacionado
+     * @complexity O(n + B): procura a matrícula nos n carros estacionados, e a
+     *             política varre as B baias
+     */
     public ParkingSession enter(Vehicle vehicle, int estimatedMinutes, LocalDateTime entryTime){
         Objects.requireNonNull(vehicle, "vehicle não pode ser null");
         Objects.requireNonNull(entryTime, "entryTime não pode ser null");
@@ -60,7 +75,10 @@ public class EntryService {
         return session;
     }
 
-     /** O(n): percorre as baias só para leitura (ADR-009). */
+     /**
+      * O(n): percorre as baias só para leitura (ADR-009).
+      * @complexity O(n), busca sequencial pelos carros estacionados
+      */
      public boolean isParked(Vehicle vehicle) {
         for (Lane lane : lanes) {
             for (ParkingSession session : lane.contents()) {
@@ -79,11 +97,16 @@ public class EntryService {
      *
      * @param policy a política nova
      * @throws NullPointerException se {@code policy} for {@code null}
+     * @complexity O(1)
      */
     public void setPolicy(PlacementPolicy policy) {
         this.policy = Objects.requireNonNull(policy, "policy não pode ser null");
     }
 
+     /**
+      * @return o número do próximo talão a emitir
+      * @complexity O(1)
+      */
      public int getNextTicketNumber() {
         return nextTicketNumber;
     }
@@ -95,6 +118,7 @@ public class EntryService {
      *
      * @param next o número gravado na última entrada, pelo menos 1
      * @throws IllegalArgumentException se {@code next} for menor que 1
+     * @complexity O(1)
      */
     public void restoreNextTicketNumber(int next) {
         if (next < 1) {

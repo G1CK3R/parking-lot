@@ -207,22 +207,32 @@ public class WaitingQueueService {
      *
      * @param policy a política nova
      * @throws NullPointerException se {@code policy} for {@code null}
+     * @complexity O(1)
      */
     public void setPolicy(ServicePolicy policy) {
         this.policy = Objects.requireNonNull(policy, "policy não pode ser null");
     }
 
-    /** @return quantos carros esperam na fila preferencial; O(1) */
+    /**
+     * @return quantos carros esperam na fila preferencial; O(1)
+     * @complexity O(1)
+     */
     public int preferentialSize() {
         return preferential.size();
     }
 
-    /** @return quantos carros esperam na fila normal; O(1) */
+    /**
+     * @return quantos carros esperam na fila normal; O(1)
+     * @complexity O(1)
+     */
     public int normalSize() {
         return normal.size();
     }
 
-    /** @return {@code true} se ninguém estiver à espera; O(1) */
+    /**
+     * @return {@code true} se ninguém estiver à espera; O(1)
+     * @complexity O(1)
+     */
     public boolean isEmpty() {
         return preferential.isEmpty() && normal.isEmpty();
     }

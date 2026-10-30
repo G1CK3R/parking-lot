@@ -240,6 +240,7 @@ public class ParkingDesk {
      * @return {@code true} se ainda não houver nenhum utilizador, caso em que
      *         a interface pede para criar o primeiro administrador em vez de
      *         mostrar o login
+     * @complexity O(1)
      */
     public boolean needsFirstAdmin() {
         return authService.size() == 0;
@@ -255,6 +256,7 @@ public class ParkingDesk {
      * @throws IllegalStateException se já houver utilizadores
      * @throws IllegalArgumentException se a palavra-passe for curta demais
      * @throws SQLException se a gravação falhar
+     * @complexity O(1), mais o custo fixo do PBKDF2
      */
     public User createFirstAdmin(String username, char[] password) throws SQLException {
         User admin = authService.createFirstAdmin(username, password);
@@ -269,6 +271,8 @@ public class ParkingDesk {
      * Autentica um utilizador à hora do relógio.
      *
      * @see #login(String, char[], LocalDateTime)
+     * @complexity O(u + m), mais o custo fixo do PBKDF2, como
+     *             {@link #login(String, char[], LocalDateTime)}
      */
     public User login(String username, char[] password) throws SQLException {
         return login(username, password, LocalDateTime.now());
@@ -287,6 +291,8 @@ public class ParkingDesk {
      *         palavra-passe estiverem errados, ou se a conta estiver
      *         bloqueada ({@link #lockedUntil} diz qual)
      * @throws SQLException se a gravação do bloqueio ou do registo falhar
+     * @complexity O(u + m): procura o nome entre os u utilizadores e esvazia as m
+     *             operações; mais o custo fixo do PBKDF2
      */
     public User login(String username, char[] password, LocalDateTime now) throws SQLException {
         Objects.requireNonNull(username, "username não pode ser null");
@@ -321,6 +327,7 @@ public class ParkingDesk {
      * @param now a hora
      * @return até quando está bloqueada, ou {@code null} se não estiver (ou
      *         se o nome não existir)
+     * @complexity O(u), u = utilizadores
      */
     public LocalDateTime lockedUntil(String username, LocalDateTime now) {
         User user = username == null ? null : authService.find(username);
@@ -333,6 +340,7 @@ public class ParkingDesk {
      *
      * @throws SQLException se a gravação do registo de auditoria falhar (a
      *         sessão termina na mesma)
+     * @complexity O(m), m = operações empilhadas
      */
     public void logout() throws SQLException {
         User leaving = currentUser;
@@ -343,7 +351,10 @@ public class ParkingDesk {
         }
     }
 
-    /** @return o utilizador autenticado, ou {@code null} se não houver */
+    /**
+     * @return o utilizador autenticado, ou {@code null} se não houver
+     * @complexity O(1)
+     */
     public User getCurrentUser() {
         return currentUser;
     }
@@ -357,6 +368,8 @@ public class ParkingDesk {
      * @throws IllegalStateException se ninguém estiver autenticado
      * @throws IllegalArgumentException se a nova palavra-passe for curta
      * @throws SQLException se a gravação falhar
+     * @complexity O(1), mais o custo fixo do PBKDF2 (verificar a actual e calcular a
+     *             nova)
      */
     public boolean changeOwnPassword(char[] current, char[] replacement) throws SQLException {
         requireLoggedIn();
@@ -376,6 +389,8 @@ public class ParkingDesk {
      * Faz entrar um carro que não é cliente preferencial.
      *
      * @see #enter(String, Vehicle.Type, int, boolean, LocalDateTime)
+     * @complexity O(B + n + w + r), como
+     *             {@link #enter(String, Vehicle.Type, int, boolean, LocalDateTime)}
      */
     public ParkingSession enter(String plate, Vehicle.Type type, int estimatedMinutes,
             LocalDateTime now) throws SQLException {
@@ -410,8 +425,9 @@ public class ParkingDesk {
      * @throws IllegalArgumentException se a matrícula estiver vazia ou a
      *         duração não for positiva
      * @throws SQLException se a gravação falhar
-     * @complexity O(B + n + w), dominado pelas buscas sequenciais nas B
-     *             baias, nos n carros estacionados e nos w em espera
+     * @complexity O(B + n + w + r), dominado pelas buscas sequenciais nas B
+     *             baias, nos n carros estacionados, nos w em espera e nas r
+     *             reservas
      */
     public ParkingSession enter(String plate, Vehicle.Type type, int estimatedMinutes,
             boolean preferentialCustomer, LocalDateTime now) throws SQLException {
@@ -455,6 +471,7 @@ public class ParkingDesk {
      * @throws IllegalStateException se ninguém estiver autenticado, se o
      *         carro já estiver estacionado ou se já tiver reserva
      * @throws SQLException se a gravação falhar
+     * @complexity O(r + n), r = reservas e n = carros estacionados
      */
     public Reservation reserve(String plate, int estimatedMinutes, LocalDateTime now)
             throws SQLException {
@@ -478,6 +495,8 @@ public class ParkingDesk {
      *         exemplo, se já expirou)
      * @throws IllegalStateException se ninguém estiver autenticado
      * @throws SQLException se a gravação falhar
+     * @complexity O(r) para cancelar; mais O(B + n) por cada carro que entra da fila
+     *             de espera
      */
     public boolean cancelReservation(String plate, LocalDateTime now) throws SQLException {
         requireLoggedIn();
@@ -628,6 +647,7 @@ public class ParkingDesk {
      * Diz quanto o carro paga se sair à hora indicada, com talão.
      *
      * @see #quote(ParkingSession, LocalDateTime, boolean)
+     * @complexity O(a + 1440 / f), como {@link #quote(ParkingSession, LocalDateTime, boolean)}
      */
     public long quote(ParkingSession session, LocalDateTime at) {
         return quote(session, at, false);
@@ -683,8 +703,8 @@ public class ParkingDesk {
      *         espaço
      * @throws IllegalArgumentException se o carro já não estiver no parque
      * @throws SQLException se a gravação falhar
-     * @complexity O(n + k + B), com n carros estacionados (busca), k carros
-     *             por cima do que sai (2k manobras) e B baias (fila de espera)
+     * @complexity O(n + k + B + a), como
+     *             {@link #exit(ParkingSession, Payment.Method, LocalDateTime, boolean)}
      */
     public ExitResult exit(ParkingSession session, Payment.Method method, LocalDateTime at)
             throws SQLException {
@@ -708,6 +728,9 @@ public class ParkingDesk {
      *         sessão já estiver fechada
      * @throws IllegalArgumentException se o carro já não estiver no parque
      * @throws SQLException se a gravação falhar
+     * @complexity O(n + k + B + a): n carros estacionados (busca), k carros por cima
+     *             do que sai (2k manobras), B baias (fila de espera) e a avenças
+     *             (validar a do carro)
      */
     public ExitResult exit(ParkingSession session, Payment.Method method, LocalDateTime at,
             boolean lostTicket) throws SQLException {
@@ -766,6 +789,7 @@ public class ParkingDesk {
      * @throws IllegalArgumentException se o mês já tiver passado, ou se o
      *         nome, a matrícula ou o método não servirem
      * @throws SQLException se a gravação falhar
+     * @complexity O(a), a = avenças vendidas
      */
     public MonthlyPass sellPass(String customerName, String phone, String plate, YearMonth month,
             Payment.Method method, LocalDateTime now) throws SQLException {
@@ -780,6 +804,7 @@ public class ParkingDesk {
     /**
      * @return todas as avenças vendidas, pela ordem de venda
      * @throws IllegalStateException se ninguém estiver autenticado
+     * @complexity O(1) para obter; O(a) para percorrer
      */
     public Iterable<MonthlyPass> passes() {
         requireLoggedIn();
@@ -828,6 +853,7 @@ public class ParkingDesk {
      * @return todos os utilizadores, para o ecrã de administração
      * @throws SecurityException se quem está autenticado não for
      *         administrador
+     * @complexity O(1) para obter; O(u) para percorrer
      */
     public Iterable<User> users() {
         AuthService.requireAdmin(currentUser);
@@ -846,6 +872,7 @@ public class ParkingDesk {
      * @throws IllegalStateException se o nome já existir
      * @throws IllegalArgumentException se a palavra-passe for curta
      * @throws SQLException se a gravação falhar
+     * @complexity O(u), mais o custo fixo do PBKDF2
      */
     public User registerUser(String username, char[] password, User.Role role) throws SQLException {
         User user = authService.register(currentUser, username, password, role);
@@ -864,6 +891,7 @@ public class ParkingDesk {
      * @throws SecurityException se quem está autenticado não for
      *         administrador
      * @throws SQLException se a gravação falhar
+     * @complexity O(u), mais o custo fixo do PBKDF2
      */
     public boolean resetPassword(String username, char[] replacement) throws SQLException {
         if (!authService.resetPassword(currentUser, username, replacement)) {
@@ -884,6 +912,7 @@ public class ParkingDesk {
      * @throws SecurityException se quem está autenticado não for
      *         administrador
      * @throws SQLException se a gravação falhar
+     * @complexity O(u)
      */
     public boolean unlockUser(String username) throws SQLException {
         if (!authService.unlock(currentUser, username)) {
@@ -906,6 +935,7 @@ public class ParkingDesk {
      * @throws IllegalStateException se for o próprio administrador ou o
      *         último administrador
      * @throws SQLException se a gravação falhar
+     * @complexity O(u)
      */
     public boolean removeUser(String username) throws SQLException {
         AuthService.requireAdmin(currentUser);
@@ -928,6 +958,7 @@ public class ParkingDesk {
      * @throws SecurityException se quem está autenticado não for
      *         administrador
      * @throws SQLException se a gravação falhar
+     * @complexity O(1)
      */
     public void changeTariff(Tariff tariff, LocalDateTime now) throws SQLException {
         AuthService.requireAdmin(currentUser);
@@ -940,6 +971,7 @@ public class ParkingDesk {
 
     /**
      * @return as políticas em vigor: colocação, atendimento e o k da rotação
+     * @complexity O(1)
      */
     public ParkPolicies getPolicies() {
         return policies;
@@ -966,6 +998,7 @@ public class ParkingDesk {
      *         administrador
      * @throws SQLException se a gravação falhar
      * @throws NullPointerException se algum argumento for {@code null}
+     * @complexity O(1)
      */
     public boolean changePolicies(ParkPolicies chosen, LocalDateTime now) throws SQLException {
         AuthService.requireAdmin(currentUser);
@@ -997,6 +1030,7 @@ public class ParkingDesk {
      *         administrador
      * @throws IOException se a escrita do ficheiro falhar
      * @throws SQLException se a leitura da base falhar
+     * @complexity O(L), L = linhas da base escritas no ficheiro
      */
     public int backup(Path file, LocalDateTime now) throws IOException, SQLException {
         AuthService.requireAdmin(currentUser);
@@ -1023,6 +1057,7 @@ public class ParkingDesk {
      * @throws SQLException se a escrita na base falhar (a base fica como
      *         estava); se só a linha de auditoria falhar, a cópia fica
      *         reposta e o método termina normalmente
+     * @complexity O(L + m), L = linhas do ficheiro repostas na base
      */
     public int restore(Path file, LocalDateTime now) throws IOException, SQLException {
         AuthService.requireAdmin(currentUser);
@@ -1051,12 +1086,18 @@ public class ParkingDesk {
         return laneViews;
     }
 
-    /** @return a fila de espera preferencial, da frente para o fim */
+    /**
+     * @return a fila de espera preferencial, da frente para o fim
+     * @complexity O(1) para obter; O(w) para percorrer
+     */
     public Iterable<WaitingCar> preferentialQueue() {
         return waitingService.preferentialContents();
     }
 
-    /** @return a fila de espera normal, da frente para o fim */
+    /**
+     * @return a fila de espera normal, da frente para o fim
+     * @complexity O(1) para obter; O(w) para percorrer
+     */
     public Iterable<WaitingCar> normalQueue() {
         return waitingService.normalContents();
     }
@@ -1082,6 +1123,8 @@ public class ParkingDesk {
      * recente: entradas, manobras e saídas.
      *
      * @return os movimentos recentes
+     * @complexity O(1) para obter e para percorrer: a fila nunca passa de
+     *             {@link #RECENT_MOVES} movimentos
      */
     public Iterable<Move> recentMoves() {
         return recentMoves;
@@ -1093,6 +1136,7 @@ public class ParkingDesk {
      * que {@link Reservation#isActive()}.
      *
      * @return as reservas, da mais antiga para a mais recente
+     * @complexity O(1) para obter; O(r) para percorrer
      */
     public Iterable<Reservation> reservations() {
         return reservationService.reservations();
@@ -1105,6 +1149,7 @@ public class ParkingDesk {
      *
      * @param now a hora actual
      * @return as reservas, da que expira primeiro para a que expira depois
+     * @complexity O(r): expira em O(1) por reserva retirada e percorre as r que ficam
      */
     public Iterable<Reservation> reservations(LocalDateTime now) {
         reservationService.expire(now);
@@ -1119,7 +1164,10 @@ public class ParkingDesk {
         return reservationService.activeCount();
     }
 
-    /** @return a tarifa em vigor */
+    /**
+     * @return a tarifa em vigor
+     * @complexity O(1)
+     */
     public Tariff getTariff() {
         return billingService.getTariff();
     }
@@ -1146,6 +1194,7 @@ public class ParkingDesk {
      * @param entry a hora de entrada
      * @param minutes a duração da estadia, em minutos
      * @return o valor, em centavos
+     * @complexity O(1440 / f), como {@link BillingService#amountBetween}
      */
     public long priceWith(Tariff tariff, LocalDateTime entry, long minutes) {
         return new BillingService(tariff).amountBetween(entry, entry.plusMinutes(minutes));
@@ -1183,6 +1232,8 @@ public class ParkingDesk {
      * @return o fecho de caixa
      * @throws IllegalStateException se ninguém estiver autenticado
      * @throws IllegalArgumentException se {@code from} não for antes de {@code to}
+     * @complexity O(d·n + n²) para n valores do turno: radix sort nos totais e duas
+     *             pilhas na ordem por valor; ver {@link ReportService}
      */
     public CashClose cashClose(LocalDateTime from, LocalDateTime to) {
         requireLoggedIn();
@@ -1204,6 +1255,7 @@ public class ParkingDesk {
      * @throws SecurityException se quem está autenticado não for
      *         administrador
      * @see ReportService#history
+     * @complexity O(N + n + d·h); ver {@link ReportService#history}
      */
     public Iterable<HistoryEntry> history(LocalDateTime from, LocalDateTime to, String plateText,
             String operator, boolean includeInPark, boolean includeLeft) {
@@ -1263,6 +1315,7 @@ public class ParkingDesk {
     /**
      * @param now a hora actual, para expirar reservas
      * @return quantos lugares estão livres e sem reserva
+     * @complexity O(B), mais as reservas que expirarem
      */
     public int freeForWalkIns(LocalDateTime now) {
         return reservationService.availableForWalkIns(now);

@@ -44,6 +44,7 @@ public class ByDeparture implements PlacementPolicy {
      * Sem a hora de saída não há como aplicar a regra: escolhe como a
      * {@link LeastOccupied}. O {@code EntryService} usa sempre o outro
      * método.
+     * @complexity O(B), como {@link LeastOccupied}
      */
     @Override
     public Lane chooseLane(Iterable<Lane> lanes, StayClass stayClass) {

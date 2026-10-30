@@ -29,7 +29,10 @@ public class ExitResult {
         this.admitted = admitted;
     }
 
-    /** @return o pagamento, já gravado na base */
+    /**
+     * @return o pagamento, já gravado na base
+     * @complexity O(1)
+     */
     public Payment getPayment() {
         return payment;
     }
@@ -37,6 +40,7 @@ public class ExitResult {
     /**
      * @return o plano da saída. É o original: quem chamar
      *         {@link RetrievalPlan#nextMove()} vai esvaziando-o
+     * @complexity O(1)
      */
     public RetrievalPlan getPlan() {
         return plan;
@@ -45,6 +49,7 @@ public class ExitResult {
     /**
      * @return a sessão do carro que entrou da fila de espera, ou
      *         {@code null} se a fila estava vazia
+     * @complexity O(1)
      */
     public ParkingSession getAdmitted() {
         return admitted;

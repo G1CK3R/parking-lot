@@ -14,6 +14,13 @@ package mz.uem.eda.parking.service.policy;
  */
 public class StrictPriority implements ServicePolicy {
 
+    /**
+     * {@inheritDoc}
+     *
+     * <p>Serve sempre a fila preferencial primeiro.
+     *
+     * @complexity O(1)
+     */
     @Override
     public boolean servePreferential(int preferentialWaiting, int normalWaiting) {
         if (preferentialWaiting <= 0 && normalWaiting <= 0) {

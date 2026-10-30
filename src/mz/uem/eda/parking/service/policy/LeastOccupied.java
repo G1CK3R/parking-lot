@@ -19,6 +19,13 @@ import mz.uem.eda.parking.model.StayClass;
  */
 public class LeastOccupied implements PlacementPolicy {
 
+    /**
+     * {@inheritDoc}
+     *
+     * <p>Escolhe a baia com menos carros; no empate, a primeira.
+     *
+     * @complexity O(B): uma passagem pelas baias
+     */
     @Override
     public Lane chooseLane(Iterable<Lane> lanes, StayClass stayClass) {
         Lane best = null;

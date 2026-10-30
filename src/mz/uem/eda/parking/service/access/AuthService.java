@@ -72,6 +72,7 @@ public class AuthService {
      * @param user o utilizador gravado
      * @throws IllegalStateException se já houver um utilizador com o mesmo
      *         nome
+     * @complexity O(u), u = utilizadores carregados
      */
     public void load(User user) {
         Objects.requireNonNull(user, "user não pode ser null");
@@ -90,6 +91,7 @@ public class AuthService {
      * @return o administrador criado
      * @throws IllegalStateException se já houver utilizadores
      * @throws IllegalArgumentException se a palavra-passe for curta demais
+     * @complexity O(1), mais o custo fixo do PBKDF2
      */
     public User createFirstAdmin(String username, char[] password) {
         if (!users.isEmpty()) {
@@ -151,6 +153,7 @@ public class AuthService {
      * @param username o utilizador a desbloquear
      * @return {@code true} se desbloqueou, {@code false} se o nome não existir
      * @throws SecurityException se {@code admin} não for administrador
+     * @complexity O(u)
      */
     public boolean unlock(User admin, String username) {
         requireAdmin(admin);
@@ -189,6 +192,8 @@ public class AuthService {
      * @return {@code true} se mudou, {@code false} se a actual estiver
      *         errada
      * @throws IllegalArgumentException se a nova for curta demais
+     * @complexity O(1), mais o custo fixo do PBKDF2 (verificar a actual e calcular a
+     *             nova)
      */
     public boolean changePassword(User user, char[] current, char[] replacement) {
         Objects.requireNonNull(user, "user não pode ser null");
@@ -210,6 +215,7 @@ public class AuthService {
      * @return {@code true} se mudou, {@code false} se o nome não existir
      * @throws SecurityException se {@code admin} não for administrador
      * @throws IllegalArgumentException se a nova for curta demais
+     * @complexity O(u), mais o custo fixo do PBKDF2
      */
     public boolean resetPassword(User admin, String username, char[] replacement) {
         requireAdmin(admin);
@@ -264,6 +270,7 @@ public class AuthService {
     /**
      * @param user o utilizador, ou {@code null}
      * @return {@code true} se for administrador
+     * @complexity O(1)
      */
     public static boolean isAdmin(User user) {
         return user != null && user.getRole() == User.Role.ADMIN;
@@ -274,6 +281,7 @@ public class AuthService {
      *
      * @param user quem pede
      * @throws SecurityException se não for administrador
+     * @complexity O(1)
      */
     public static void requireAdmin(User user) {
         if (!isAdmin(user)) {
@@ -298,7 +306,10 @@ public class AuthService {
         return null;
     }
 
-    /** @return quantos utilizadores existem; O(1) */
+    /**
+     * @return quantos utilizadores existem; O(1)
+     * @complexity O(1)
+     */
     public int size() {
         return users.size();
     }

@@ -64,6 +64,7 @@ public class BillingService {
 
     /**
      * @return a tarifa em vigor, nunca {@code null}
+     * @complexity O(1)
      */
     public Tariff getTariff() {
         return tariff;
@@ -77,6 +78,7 @@ public class BillingService {
      *
      * @param tariff a nova tarifa
      * @throws NullPointerException se {@code tariff} for {@code null}
+     * @complexity O(1)
      */
     public void setTariff(Tariff tariff) {
         this.tariff = Objects.requireNonNull(tariff, "tariff não pode ser null");
@@ -207,6 +209,7 @@ public class BillingService {
      * @param lostTicket se o carro sai sem talão
      * @param coveredByPass se a matrícula tem uma avença válida
      * @return o valor em centavos
+     * @complexity O(1)
      */
     public long quote(ParkingSession session, LocalDateTime at, boolean lostTicket, boolean coveredByPass) {
         long stay = coveredByPass ? 0 : amountDue(session, at);

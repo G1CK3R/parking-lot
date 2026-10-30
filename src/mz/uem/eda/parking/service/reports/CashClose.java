@@ -30,6 +30,7 @@ public final class CashClose {
     /**
      * @return a receita do turno, só deste operador: período, total,
      *         número de valores e totais por método
+     * @complexity O(1)
      */
     public RevenueReport getReport() {
         return report;
@@ -38,12 +39,16 @@ public final class CashClose {
     /**
      * @return os valores do turno (pagamentos de estadias e avenças), do maior
      *         para o menor, ordenados com duas pilhas
+     * @complexity O(1) para obter; O(n) para percorrer
      */
     public Iterable<Charge> chargesByAmount() {
         return byAmount;
     }
 
-    /** @return quantas comparações fez a ordenação com duas pilhas */
+    /**
+     * @return quantas comparações fez a ordenação com duas pilhas
+     * @complexity O(1)
+     */
     public long getComparisons() {
         return comparisons;
     }

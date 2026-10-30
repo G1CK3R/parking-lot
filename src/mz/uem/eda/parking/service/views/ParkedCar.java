@@ -16,17 +16,26 @@ public final class ParkedCar {
         this.depth = depth;
     }
 
-    /** @return a sessão: talão, matrícula, baia, entrada e duração declarada */
+    /**
+     * @return a sessão: talão, matrícula, baia, entrada e duração declarada
+     * @complexity O(1)
+     */
     public ParkingSession getSession() {
         return session;
     }
 
-    /** @return quantos carros tem por cima (0 se está no topo) */
+    /**
+     * @return quantos carros tem por cima (0 se está no topo)
+     * @complexity O(1)
+     */
     public int getDepth() {
         return depth;
     }
 
-    /** @return quantas manobras custa tirá-lo: 2k, com k carros por cima */
+    /**
+     * @return quantas manobras custa tirá-lo: 2k, com k carros por cima
+     * @complexity O(1)
+     */
     public int getManoeuvres() {
         return 2 * depth;
     }

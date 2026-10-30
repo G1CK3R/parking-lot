@@ -35,6 +35,13 @@ public class RoundRobin implements ServicePolicy {
         this.servedInARow = 0;
     }
 
+    /**
+     * {@inheritDoc}
+     *
+     * <p>Serve até k preferenciais seguidos e depois um normal.
+     *
+     * @complexity O(1)
+     */
     @Override
     public boolean servePreferential(int preferentialWaiting, int normalWaiting) {
         if (preferentialWaiting <= 0 && normalWaiting <= 0) {
@@ -55,7 +62,10 @@ public class RoundRobin implements ServicePolicy {
         return false;
     }
 
-    /** @return k, os preferenciais seguidos antes de um normal */
+    /**
+     * @return k, os preferenciais seguidos antes de um normal
+     * @complexity O(1)
+     */
     public int getPreferentialTurns() {
         return preferentialTurns;
     }

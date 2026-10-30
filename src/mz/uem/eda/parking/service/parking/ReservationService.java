@@ -286,12 +286,18 @@ public class ReservationService {
         lastLoaded = reservation;
     }
 
-    /** @return quantas reservas estão activas; O(1) */
+    /**
+     * @return quantas reservas estão activas; O(1)
+     * @complexity O(1)
+     */
     public int activeCount() {
         return activeCount;
     }
 
-    /** @return a tolerância de cada reserva, em minutos */
+    /**
+     * @return a tolerância de cada reserva, em minutos
+     * @complexity O(1)
+     */
     public int getToleranceMinutes() {
         return toleranceMinutes;
     }

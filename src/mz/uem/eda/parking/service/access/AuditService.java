@@ -65,7 +65,10 @@ public class AuditService {
         return entries;
     }
 
-    /** @return quantas linhas tem o registo; O(1) */
+    /**
+     * @return quantas linhas tem o registo; O(1)
+     * @complexity O(1)
+     */
     public int size() {
         return entries.size();
     }

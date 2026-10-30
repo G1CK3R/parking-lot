@@ -34,6 +34,7 @@ public class MonthlyPassService {
      * chama este método, no arranque, pela ordem de venda.
      *
      * @param pass a avença gravada
+     * @complexity O(1)
      */
     public void load(MonthlyPass pass) {
         passes.enqueue(Objects.requireNonNull(pass, "pass não pode ser null"));
@@ -118,7 +119,10 @@ public class MonthlyPassService {
         return passes;
     }
 
-    /** @return quantas avenças foram vendidas; O(1) */
+    /**
+     * @return quantas avenças foram vendidas; O(1)
+     * @complexity O(1)
+     */
     public int size() {
         return passes.size();
     }

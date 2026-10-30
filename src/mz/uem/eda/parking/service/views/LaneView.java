@@ -30,12 +30,18 @@ public class LaneView {
         this.lane = lane;
     }
 
-    /** @return o código da baia, por exemplo {@code "J04"} */
+    /**
+     * @return o código da baia, por exemplo {@code "J04"}
+     * @complexity O(1)
+     */
     public String getCode() {
         return lane.getCode();
     }
 
-    /** @return quantos carros cabem na baia */
+    /**
+     * @return quantos carros cabem na baia
+     * @complexity O(1)
+     */
     public int getCapacity() {
         return lane.getCapacity();
     }
@@ -43,12 +49,16 @@ public class LaneView {
     /**
      * @return a classe de permanência a que a baia se destina, ou
      *         {@code null} na baia de manobra
+     * @complexity O(1)
      */
     public StayClass getStayClass() {
         return lane.getStayClass();
     }
 
-    /** @return {@code true} se esta for a baia de manobra */
+    /**
+     * @return {@code true} se esta for a baia de manobra
+     * @complexity O(1)
+     */
     public boolean isBuffer() {
         return lane.isBuffer();
     }
@@ -80,7 +90,10 @@ public class LaneView {
         return lane.contents();
     }
 
-    /** @return o código e a ocupação, por exemplo {@code "J04 3/10"} */
+    /**
+     * @return o código e a ocupação, por exemplo {@code "J04 3/10"}
+     * @complexity O(1)
+     */
     @Override
     public String toString() {
         return lane.toString();

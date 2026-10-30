@@ -54,82 +54,130 @@ public final class RevenueReport {
         this.passTotalCents = sum;
     }
 
-    /** @return o início do período, incluído */
+    /**
+     * @return o início do período, incluído
+     * @complexity O(1)
+     */
     public LocalDateTime getFrom() {
         return from;
     }
 
-    /** @return o fim do período, excluído */
+    /**
+     * @return o fim do período, excluído
+     * @complexity O(1)
+     */
     public LocalDateTime getTo() {
         return to;
     }
 
-    /** @return o operador a que o relatório se limita, ou {@code null} se for de todos */
+    /**
+     * @return o operador a que o relatório se limita, ou {@code null} se for de todos
+     * @complexity O(1)
+     */
     public String getOperator() {
         return operator;
     }
 
-    /** @return quantos valores foram cobrados no período: estadias e avenças */
+    /**
+     * @return quantos valores foram cobrados no período: estadias e avenças
+     * @complexity O(1)
+     */
     public int getCount() {
         return byTime.size() + passes.size();
     }
 
-    /** @return quantos pagamentos de estadias houve no período */
+    /**
+     * @return quantos pagamentos de estadias houve no período
+     * @complexity O(1)
+     */
     public int getPaymentCount() {
         return byTime.size();
     }
 
-    /** @return quantas avenças foram vendidas no período */
+    /**
+     * @return quantas avenças foram vendidas no período
+     * @complexity O(1)
+     */
     public int getPassCount() {
         return passes.size();
     }
 
-    /** @return a receita do período, estadias e avenças, em centavos */
+    /**
+     * @return a receita do período, estadias e avenças, em centavos
+     * @complexity O(1)
+     */
     public long getTotalCents() {
         return totalCents;
     }
 
-    /** @return a parte da receita que veio de avenças, em centavos */
+    /**
+     * @return a parte da receita que veio de avenças, em centavos
+     * @complexity O(1)
+     */
     public long getPassTotalCents() {
         return passTotalCents;
     }
 
-    /** @return o valor médio de um valor cobrado, em centavos (0 sem valores) */
+    /**
+     * @return o valor médio de um valor cobrado, em centavos (0 sem valores)
+     * @complexity O(1)
+     */
     public long getAverageCents() {
         return getCount() == 0 ? 0 : totalCents / getCount();
     }
 
-    /** @return os pagamentos de estadias pela hora, do mais antigo para o mais recente */
+    /**
+     * @return os pagamentos de estadias pela hora, do mais antigo para o mais recente
+     * @complexity O(1) para obter; O(n) para percorrer
+     */
     public Iterable<Payment> paymentsByTime() {
         return byTime;
     }
 
-    /** @return os pagamentos de estadias pelo valor, do maior para o menor */
+    /**
+     * @return os pagamentos de estadias pelo valor, do maior para o menor
+     * @complexity O(1) para obter; O(n) para percorrer
+     */
     public Iterable<Payment> paymentsByAmount() {
         return byAmount;
     }
 
-    /** @return os pagamentos de estadias pelo número do talão, do menor para o maior */
+    /**
+     * @return os pagamentos de estadias pelo número do talão, do menor para o maior
+     * @complexity O(1) para obter; O(n) para percorrer
+     */
     public Iterable<Payment> paymentsByTicket() {
         return byTicket;
     }
 
-    /** @return as avenças vendidas no período, pela hora */
+    /**
+     * @return as avenças vendidas no período, pela hora
+     * @complexity O(1) para obter; O(n) para percorrer
+     */
     public Iterable<MonthlyPass> passes() {
         return passes;
     }
 
-    /** @return um total por dia com valores cobrados, do mais antigo para o mais recente */
+    /**
+     * @return um total por dia com valores cobrados, do mais antigo para o mais recente
+     * @complexity O(1) para obter; O(n) para percorrer
+     */
     public Iterable<RevenueLine<LocalDate>> byDay() {
         return byDay;
     }
 
-    /** @return um total por operador, pela ordem em que os operadores foram criados */
+    /**
+     * @return um total por operador, pela ordem em que os operadores foram criados
+     * @complexity O(1) para obter; O(n) para percorrer
+     */
     public Iterable<RevenueLine<String>> byOperator() {
         return byOperator;
     }
 
-    /** @return um total por método de pagamento usado, pela ordem do enum */
+    /**
+     * @return um total por método de pagamento usado, pela ordem do enum
+     * @complexity O(1) para obter; O(n) para percorrer
+     */
     public Iterable<RevenueLine<Payment.Method>> byMethod() {
         return byMethod;
     }

@@ -17,17 +17,26 @@ public final class HistoryEntry {
         this.payment = payment;
     }
 
-    /** @return a sessão: talão, matrícula, baia, entrada e, se saiu, saída e manobras */
+    /**
+     * @return a sessão: talão, matrícula, baia, entrada e, se saiu, saída e manobras
+     * @complexity O(1)
+     */
     public ParkingSession getSession() {
         return session;
     }
 
-    /** @return o pagamento da saída, ou {@code null} se o carro ainda está no parque */
+    /**
+     * @return o pagamento da saída, ou {@code null} se o carro ainda está no parque
+     * @complexity O(1)
+     */
     public Payment getPayment() {
         return payment;
     }
 
-    /** @return {@code true} se o carro ainda está no parque */
+    /**
+     * @return {@code true} se o carro ainda está no parque
+     * @complexity O(1)
+     */
     public boolean isInPark() {
         return payment == null;
     }

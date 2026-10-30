@@ -24,17 +24,26 @@ public final class RevenueLine<K> {
         this.totalCents = totalCents;
     }
 
-    /** @return o dia, o operador ou o método desta linha */
+    /**
+     * @return o dia, o operador ou o método desta linha
+     * @complexity O(1)
+     */
     public K getKey() {
         return key;
     }
 
-    /** @return quantos pagamentos */
+    /**
+     * @return quantos pagamentos
+     * @complexity O(1)
+     */
     public int getCount() {
         return count;
     }
 
-    /** @return quanto somaram, em centavos */
+    /**
+     * @return quanto somaram, em centavos
+     * @complexity O(1)
+     */
     public long getTotalCents() {
         return totalCents;
     }

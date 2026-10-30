@@ -10,6 +10,13 @@ import mz.uem.eda.parking.model.StayClass;
  */
 public class FirstWithSpace implements PlacementPolicy {
 
+    /**
+     * {@inheritDoc}
+     *
+     * <p>Escolhe a primeira baia com espaço, pela ordem da configuração.
+     *
+     * @complexity O(B): uma passagem pelas baias, que pára na primeira com espaço
+     */
     @Override
     public Lane chooseLane(Iterable<Lane> lanes, StayClass stayClass) {
         for (Lane lane : lanes) {

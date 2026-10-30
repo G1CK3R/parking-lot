@@ -61,6 +61,7 @@ public final class ReportService {
      * A receita de um período, só com pagamentos de estadias (sem avenças).
      *
      * @see #revenue(Iterable, Iterable, LocalDateTime, LocalDateTime, String)
+     * @complexity O(d·n), como a versão com avenças
      */
     public static RevenueReport revenue(Iterable<Payment> history, LocalDateTime from, LocalDateTime to,
             String operator) {
@@ -139,6 +140,7 @@ public final class ReportService {
      * O fecho de caixa de um turno, só com pagamentos de estadias.
      *
      * @see #cashClose(Iterable, Iterable, User, LocalDateTime, LocalDateTime)
+     * @complexity O(d·n + n²), como a versão com avenças
      */
     public static CashClose cashClose(Iterable<Payment> history, User operator, LocalDateTime from,
             LocalDateTime to) {

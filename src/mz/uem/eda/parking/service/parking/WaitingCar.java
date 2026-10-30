@@ -51,27 +51,42 @@ public class WaitingCar {
         this.preferential = preferential;
      }
 
-    /** @return a viatura, nunca {@code null} */
+    /**
+     * @return a viatura, nunca {@code null}
+     * @complexity O(1)
+     */
     public Vehicle getVehicle() {
         return vehicle;
     }
 
-    /** @return a duração estimada, em minutos */
+    /**
+     * @return a duração estimada, em minutos
+     * @complexity O(1)
+     */
     public int getEstimatedMinutes() {
         return estimatedMinutes;
     }
 
-    /** @return a hora a que o carro chegou à fila, nunca {@code null} */
+    /**
+     * @return a hora a que o carro chegou à fila, nunca {@code null}
+     * @complexity O(1)
+     */
     public LocalDateTime getArrivedAt() {
         return arrivedAt;
     }
 
-    /** @return {@code true} se o carro esperar na fila preferencial */
+    /**
+     * @return {@code true} se o carro esperar na fila preferencial
+     * @complexity O(1)
+     */
     public boolean isPreferential() {
         return preferential;
     }
 
-    /** @return a matrícula e a fila, por exemplo {@code "AAA123MC (P)"} */
+    /**
+     * @return a matrícula e a fila, por exemplo {@code "AAA123MC (P)"}
+     * @complexity O(1)
+     */
     @Override
     public String toString() {
         return vehicle.getPlate() + (preferential ? " (P)" : " (N)");
